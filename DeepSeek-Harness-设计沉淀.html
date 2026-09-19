@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DeepSeek Harness 设计沉淀：AGENTS.md 体系、Agent Notes 与 Gate 脚本</title>
+<style>body {
+  font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC",
+    "Hiragino Sans GB", sans-serif;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+  line-height: 1.75;
+  color: #1f2328;
+  font-size: 16px;
+}
+h1, h2 { border-bottom: 1px solid #d8dee4; padding-bottom: 8px; margin-top: 2em; }
+h1 { font-size: 1.9em; margin-top: 0.5em; }
+h2 { font-size: 1.4em; }
+h3 { font-size: 1.15em; margin-top: 1.6em; }
+a { color: #0969da; text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+  font-family: Consolas, "JetBrains Mono", "Cascadia Code", monospace;
+  background: #f6f8fa;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 0.9em;
+}
+pre {
+  background: #f6f8fa;
+  border: 1px solid #e6eaef;
+  border-radius: 8px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  line-height: 1.5;
+}
+pre code { background: none; padding: 0; font-size: 0.85em; }
+blockquote {
+  border-left: 4px solid #d0d7de;
+  color: #57606a;
+  margin: 0 0 1em;
+  padding: 0 1em;
+}
+table { border-collapse: collapse; margin: 1em 0; display: block; overflow-x: auto; }
+th, td { border: 1px solid #d0d7de; padding: 6px 14px; }
+th { background: #f6f8fa; }
+tr:nth-child(even) td { background: #fbfcfd; }
+hr { border: none; border-top: 1px solid #d8dee4; margin: 2em 0; }
+li > p { margin: 0.3em 0; }</style>
+</head>
+<body>
+<h1>DeepSeek Harness 设计沉淀：AGENTS.md 体系、Agent Notes 与 Gate 脚本</h1>
+<blockquote>
+<p>基于 deepseek-harness 源码 <code>fb2c4b9e</code>（2026-09-10，0.1.5-rc.2 附近）整理。上游更新较快，细节以源码为准；源码在本目录 <code>deepseek-harness/</code> 下（只读参考）。</p>
+<p>说明：问题里的 "agent.md" 实为 <strong><code>AGENTS.md</code></strong>，".agent 目录" 实为 <strong><code>.agents/</code></strong>。本文所有路径均相对 <code>deepseek-harness/</code> 仓库根。</p>
+</blockquote>
+<h2>0. 总览：三层分工</h2>
+<p>一个长期由 agent（和人）协作开发的复杂仓库，有三对核心矛盾：上下文有限（规则不能全塞给每届会话）、决策会被遗忘（代码和文档承载不了"为什么"）、约定会漂移（口头约定没有强制力）。DSH 用三层载体分别解决：</p>
+<table>
+<thead>
+<tr>
+<th>层</th>
+<th>载体</th>
+<th>回答的问题</th>
+<th>关键特征</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>常备指令</strong></td>
+<td><code>AGENTS.md</code>（分层分布，全仓约 22 份）</td>
+<td>每届会话必须知道什么</td>
+<td>有字数预算；每条规则 1~3 行并链接到理由的"家"</td>
+</tr>
+<tr>
+<td><strong>决策档案</strong></td>
+<td><code>.agents/notes/</code>（Agent Notes）</td>
+<td>当时为什么这么决定、放弃了什么</td>
+<td>RFC/ADR 式；状态编码在路径里；强制记录被否方案</td>
+</tr>
+<tr>
+<td><strong>机械门禁</strong></td>
+<td><code>scripts/</code>（gates and generators）</td>
+<td>约定如何保证不漂移</td>
+<td>不变量全部进可执行 gate；gate 必须能拒绝坏案例</td>
+</tr>
+</tbody>
+</table>
+<p>配套的第四个组件是 <code>.agents/skills/</code>（技能）：把"何时做、按什么标准做、如何校验"的工作流封装成可复用单元，供 agent 按需加载。</p>
+<p>一句话概括：<strong>规则放在 AGENTS.md，理由放进 Agent Note，执行交给 Gate 脚本</strong>。</p>
+<pre><code>                 ┌─────────────────────────────┐
+   每届会话载入 → │ AGENTS.md（规则，短，有预算） │──链接──┐
+                 └─────────────────────────────┘        │ 指向理由
+                 ┌─────────────────────────────┐        ↓
+   按需查阅     │ .agents/notes/（决策+理由档案）│←──  互链
+                 └─────────────────────────────┘        ↑
+                 ┌─────────────────────────────┐        │ 校验两者
+   CI/本地执行 → │ scripts/（gate 脚本+spec）    │────────┘
+                 └─────────────────────────────┘
+</code></pre>
+<hr />
+<h2>1. AGENTS.md 体系：分层的常备指令</h2>
+<h3>1.1 分布与分层</h3>
+<p>AGENTS.md 不只在根目录，而是沿目录树分布（根、<code>packages/</code>、<code>docs/</code>、<code>scripts/</code>、<code>.agents/notes/</code>、<code>snapshots/</code>、<code>vendor/</code>、<code>website/</code> 等，另有个别子包如 <code>packages/client/</code>）。<code>docs/AGENTS.md</code> 里的 tier 表定义了分层职责：</p>
+<ul>
+<li><strong>根 <code>AGENTS.md</code></strong>：standing orders——每届会话都需要在上下文里的规则，每条 1~3 行，只放"常备命令"，其余（故事、示例、流程细节）禁止放。</li>
+<li><strong>子树 <code>AGENTS.md</code></strong>：只放该子树特有的指令，不放根文件已覆盖的规则。</li>
+<li><strong><code>CLAUDE.md</code> 是 <code>AGENTS.md</code> 的符号链接</strong>（根和 <code>packages/</code> 两处）：单一来源，同时服务多个 agent 产品；要改就改真身 <code>AGENTS.md</code>。</li>
+</ul>
+<h3>1.2 根 AGENTS.md 的内容结构</h3>
+<p>以根文件为例，段落依次是：仓库布局（注释式目录地图）→ 命令清单 → 沙箱失败处理 → Secrets → Conventions（约 30 条一句话规则）→ 防御性模式 / 类型与文档规范 → "如何编辑这份指令本身"。两个最值得学的特征：</p>
+<p><strong>每条规则自带 rationale 链接。</strong> 一条规则只有一两行正文，括号里链接到拥有它的文档或 Agent Note，例如：</p>
+<pre><code class="language-markdown">- **No hardcoded tunables in plugins**: deployment-varying choices are validated
+  `Config` fields changeable from cordis.yml; ...
+- **Non-trivial changes MUST include an Agent Note in the same PR**
+  ([scope](.agents/notes/README.md#when-to-write-one)).
+</code></pre>
+<p>规则因此可以极短——"是什么"在上下文里，"为什么"按需跳转。这就是 <em>"one home per fact"</em>（每个事实只有一个家，其他地方一律链接）。</p>
+<p><strong>指令本身有字数预算，且被 gate 强制。</strong> <code>verify-doc-budgets</code>（预算清单在 <code>scripts/doc-budgets.manifest.json</code>）规定根 AGENTS.md ≤ 1,950 词、子树 AGENTS.md ≤ 600 词。超了只能：先"搬走"（内容属于别的 tier）、再"压缩"、确实需要才在 PR 里说明并上调上限。<strong>上下文是稀缺资源是硬约束，不是口号</strong>——它直接写进了可执行的检查里。</p>
+<h3>1.3 设计意图</h3>
+<ul>
+<li>分层 + 预算解决"上下文有限"：会话只常备最短规则集，细节靠链接按需加载。</li>
+<li>规则与理由分离解决"规则膨胀"：理由不挤占上下文，但永不丢失。</li>
+<li>子树自治（每个目录自己的 AGENTS.md）让规则靠近被规则约束的代码，且不污染全局。</li>
+</ul>
+<hr />
+<h2>2. Agent Notes：agent 写的 RFC/ADR</h2>
+<h3>2.1 定位</h3>
+<p><code>.agents/notes/AGENTS.md</code> 的定义只有一句核心话：</p>
+<blockquote>
+<p>Agent Notes are effectively RFCs written by agents: durable proposals and decision records that preserve rationale, alternatives, consequences, and required verification.</p>
+</blockquote>
+<p>即：<strong>agent 写给未来的 agent（和人）的决策记录</strong>，保存的是代码和文档都承载不了的部分——动机（why）、被放弃的备选方案、后果、以及当时承诺过的验证方式。强制纪律是：<strong>每个非平凡变更必须在同一个 PR 里新增或更新至少一篇 Agent Note</strong>；只有纯机械/局部改动豁免。</p>
+<h3>2.2 路径即状态：双轴编码</h3>
+<p>每篇 note 的路径就是它的全部元数据：<code>{lifecycle}/{class}/yyyy-mm-dd-topic.md</code>。</p>
+<pre><code>.agents/notes/
+├── AGENTS.md                  # notes 自身的规则入口（很短，只讲 supersession 与归档）
+├── README.md / .zh.md         # Agent Note 完整规范
+├── proposed/                  # 提案：尚未（或只部分）实现
+│   ├── architecture/  bug-fix/  feature/  process/  testing/
+├── implemented/               # 决策已落地（自身还有一份 AGENTS.md 补充规则）
+├── rejected/                  # 已否决（正文冻结，结论写在 Status 行）
+└── archived/                  # 归档区：封存的历史快照，永不编辑
+</code></pre>
+<ul>
+<li><strong>lifecycle（顶层目录）= 生命周期状态</strong>：<code>proposed</code> → <code>implemented</code> 或 <code>rejected</code>；低价值的 <code>implemented</code> 老记录移入 <code>archived/</code>。文件在目录间移动 = 状态迁移，必须同一变更内改写 <code>Status:</code> 行并满足目标目录的骨架，gate 校验两者一致。</li>
+<li><strong>class（子目录）= 决策类型闭集</strong>：<code>feature / bug-fix / simplification / architecture / process / testing</code>。闭集定义在 <code>scripts/agent-note-tree.ts</code>，分类 gate 拒绝任何其他目录；<strong>加一个类必须同时改代码和 README</strong>——刻意让"扩类"成为慎重动作。规范还解释了为什么没有 <code>refactor</code>：它与 <code>simplification</code> 的判别式（"可观察行为是否改变？"）重叠。</li>
+<li><strong>文件名日期 = 主题首次提出的时间</strong>（以 git 历史为准），其余时间信息都交给 git，Status 行不带日期。</li>
+</ul>
+<p>这套"路径即状态机"的好处：文件系统本身就是数据库，<code>walk</code> 一遍目录就是一次校验；状态一目了然，无需额外的索引机制。</p>
+<h3>2.3 文件格式：骨架随生命周期变化</h3>
+<p>每篇 note 的头三行固定：</p>
+<pre><code class="language-markdown"># Agent Note: &lt;title&gt;
+
+Status: proposed   |   Status: implemented   |   Status: rejected — &lt;一行理由&gt;
+</code></pre>
+<p>正文以 <code>## Problem</code> 开头（动机必须独立于方案可读），其余章节按 lifecycle 有规定骨架（<code>verify-agent-note-format.ts</code> 属于 <code>doc-sync</code> gate 的一部分）：</p>
+<table>
+<thead>
+<tr>
+<th>lifecycle</th>
+<th>骨架</th>
+<th>要求</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>proposed/</code></td>
+<td>Problem / <strong>Proposal</strong> / Alternatives considered / Acceptance criteria / Risks</td>
+<td>可以谈计划、迁移步骤、open questions</td>
+</tr>
+<tr>
+<td><code>implemented/</code></td>
+<td>Problem / <strong>Decision</strong> / Alternatives considered / Consequences</td>
+<td>现在时描述已落地现实；<code>## Proposal</code>、<code>## Plan</code>、<code>## Acceptance criteria</code> 等 spec 语言被 gate <strong>拒绝</strong>（防止"永远在讲计划"的文档腐坏）</td>
+</tr>
+<tr>
+<td><code>rejected/</code></td>
+<td>冻结的 proposal 原文</td>
+<td>结论只写在 <code>Status:</code> 行——"被否的理由是读者唯一来看的事实"</td>
+</tr>
+</tbody>
+</table>
+<p><strong><code>## Alternatives considered</code> 强制存在</strong>，规范里给了理由，这句值得单独记：</p>
+<blockquote>
+<p>A decision recorded without what it beat invites re-litigation — the failure Agent Notes exist to prevent.
+（不记录决策打败了谁，就会有人重新争论它——这正是 Agent Note 要防止的失败。）</p>
+</blockquote>
+<p>真实样例（<code>implemented/architecture/2026-06-11-event-sourced-sessions.md</code>，仅 260 词）：Problem 一句话 → Decision 三段（事件溯源 + 派生消息历史 + 追加时序契约）→ Alternatives considered 一段（"可变消息数组为什么输了"）→ Consequences 四条（保证、代价、扩展性、缓解方案）。<strong>短而完整：决策、代价、被否方案、验证全部在场。</strong></p>
+<h3>2.4 生命周期治理：取代、归档、删除</h3>
+<p>这是整套体系最有特色的部分：</p>
+<ul>
+<li><strong>每篇新 note 触发 supersession 检查</strong>：检索活跃树里覆盖同一决策的旧 note；完全取代 → 走 consolidation 规则（新主人吸收旧 note 的每一条独有 rationale 后删除旧件并修复所有入链）；部分取代 → 两篇互链保活。<strong>不许把旧 note 就地改写成相反决策</strong>——改决策 = 新 note + 互链。</li>
+<li><strong><code>implemented/</code> 的 note 保持与现实同步</strong>（<code>implemented/AGENTS.md</code>）：代码改了路径/包名/默认值，note 在同一变更内更新事实——但这只是事实性跟新，<strong>不是改写决策的许可</strong>。</li>
+<li><strong>归档 = 封存而非删除</strong>（<code>dsh-archive-agent-notes</code> 技能 + <code>verify-archived-agent-notes.ts</code>）：完整三件套（英文 + <code>.zh.md</code> 中文对照 + <code>.i18n.yaml</code> sidecar）整体移入 <code>archived/</code>，正文零改动，只插入一行 <code>Archived: YYYY-MM-DD</code>，sidecar 重新记录哈希，进 <strong>append-only 的封存清单</strong>（先证明所有旧封存未被篡改，再追加新条目）。此后永不编辑——历史快照不是现行权威。</li>
+<li><strong>归档判据是语义的，不是机械的</strong>：按"未来决策价值"判断（rationale、负面保证、安全规则、重引入条件是否还会指导未来工作），明确禁止按字数/年龄/配额归档；技能里给了一组<strong>校准样例</strong>（533 词该归档，248 词该保留——"长度不是标准"）。</li>
+<li><strong>rejected 的保留条件</strong>：只有当这篇否决记录还能阻止一个"诱人的、有意义的错误"时才保留，否则整个三件套删除。</li>
+<li><strong>禁止中央索引</strong>：<code>agent-note-tree.ts</code> 里对 <code>INDEX.md</code> 直接报错（"centralized Agent Note indexes are forbidden; browse the lifecycle/class tree or search the repository"）。理由：活跃树本身就是工作清单，再加索引必然双份维护并漂移。</li>
+</ul>
+<h3>2.5 双语契约</h3>
+<p>每篇 note 是 <code>foo.md</code> + <code>foo.zh.md</code>（逐节镜像）+ <code>foo.i18n.yaml</code>（一致性 sidecar）三件套；机器检查的 header token（<code># Agent Note:</code> 和 <code>Status:</code> 行）在中文版里保持英文原样。配对一致性由专门的 pairing gate 负责。</p>
+<hr />
+<h2>3. <code>.agents/skills/</code>：把工作流封装成技能</h2>
+<p><code>skills/</code> 下 12 个技能（<code>dsh-archive-agent-notes</code>、<code>dsh-pre-push-checks</code>、<code>dsh-code-review</code>、<code>dsh-doc</code>、<code>dsh-prose-standard</code>、<code>dsh-ci-test-reliability</code>、<code>dsh-find-simplifications</code>、<code>dsh-translate-docs</code> 等），每个一个目录 + <code>SKILL.md</code>（frontmatter 只有 <code>name</code> 和触发时机导向的 <code>description</code>），可带 <code>references/</code>、<code>templates/</code>、<code>scripts/</code>。</p>
+<p>设计要点：</p>
+<ul>
+<li><strong>技能承载"流程知识"而非"产品契约"</strong>：产品/运行时契约归 docs 和源码，技能只固化"这类工作该怎么做、按什么标准校验"（这条边界写在 <code>docs/AGENTS.md</code> 的 tier 表里）。</li>
+<li><strong>判断标准用校准样例传达，不用阈值</strong>：如归档技能里的" calibrated examples"——每个例子给出字数与裁决，示范"语义优先于字数"。</li>
+<li><strong>技能与 gate 互相引用</strong>：技能末尾固定一节"Validate and report"，指明要跑哪些 gate（<code>pnpm run doc-sync</code>、<code>git diff --check</code>……）以及报告格式——流程的出口永远是可执行校验。</li>
+</ul>
+<hr />
+<h2>4. <code>scripts/</code>：Gates and Generators——约定的机械化</h2>
+<p>根 AGENTS.md 给 <code>scripts/</code> 的定位就四个词：<strong>gates and generators</strong>。它把前两层（AGENTS.md 的规则、Agent Notes 的纪律）里所有"可机械检查"的部分变成可执行程序。</p>
+<h3>4.1 与 notes 体系直接相关的 gate</h3>
+<table>
+<thead>
+<tr>
+<th>脚本</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scripts/agent-note-tree.ts</code></td>
+<td>notes 树的结构事实来源：lifecycle/class <strong>闭集</strong>、目录深度与文件名正则、walk 返回全部违规；<strong><code>INDEX.md</code> 直接判死</strong></td>
+</tr>
+<tr>
+<td><code>scripts/verify-agent-note-format.ts</code></td>
+<td>单篇 note 格式：头三行、Status 与所在目录互查、各 lifecycle 骨架、implemented 禁用 spec 语言、Alternatives considered 强制</td>
+</tr>
+<tr>
+<td><code>scripts/verify-archived-agent-notes.ts</code></td>
+<td>归档封存：闭集树、完整三件套、归档元数据、sidecar 哈希、<strong>append-only 冻结内容清单</strong></td>
+</tr>
+<tr>
+<td><code>scripts/run-gates.ts</code></td>
+<td>gate 聚合器（<code>pnpm run doc-sync</code> 的叶子清单）</td>
+</tr>
+<tr>
+<td><code>scripts/doc-budgets.manifest.json</code> + <code>verify-doc-budgets</code></td>
+<td>文档字数预算</td>
+</tr>
+</tbody>
+</table>
+<p>每个脚本都有同目录同名 <code>.spec.ts</code>（<code>scripts/AGENTS.md</code> 要求 spec 在 forked worker 里与全套件并行跑，"只在单跑时通过的 spec 就是缺陷"）。</p>
+<h3>4.2 gate 的设计原则</h3>
+<p><code>scripts/AGENTS.md</code> 和根 AGENTS.md 各给出几条，合起来看：</p>
+<ul>
+<li><strong>不变量必须进 gate，且 gate 必须自证</strong>："Wire mechanically checkable invariants into an executed top-level gate and prove each changed acceptance path rejects an invalid case"——不仅要检查，还要证明每个新接入的校验路径<strong>真的拒绝过一个坏案例</strong>。</li>
+<li><strong>禁用窄例外优于全局关闭规则</strong>（"Use narrow, justified exceptions instead of disabling a rule globally"）。</li>
+<li>gate 自身工程化：不经过 shell 调 pnpm、glob 路径归一化、平台适配只留在需要它的 gate、语法感知的源发现、防空语料/被收窄语料的护栏。</li>
+<li><strong>规范与执行互为镜像</strong>：README 写"class 是闭集，加类需同时改 README 和本文件"，<code>agent-note-tree.ts</code> 顶注释同样声明"closed under <code>.agents/notes/README.md</code>"——两处互指，改一处必然让 gate 变红提醒你改另一处。</li>
+</ul>
+<hr />
+<h2>5. 设计哲学提炼</h2>
+<ol>
+<li><strong>三层分工，各答一问</strong>：规则（AGENTS.md）答"要做什么"，note 答"为什么这么做"，gate 答"怎么保证一直如此"。任何一层单独存在都会失败：只有规则会漂移，只有档案没人看，只有 gate 没有判断力。</li>
+<li><strong>Rationale 是一等公民</strong>。整套体系最独特之处是把"防止 re-litigation"（防止对已决事项的反复争论）当作明确目标，为此强制记录被否方案、否决理由、重引入条件。</li>
+<li><strong>路径即状态，目录即数据库</strong>。lifecycle/class/date 全部编码在路径里，walk 即校验，无需额外元数据存储。</li>
+<li><strong>One home per fact</strong>。每个事实只有一个"家"，其余全是链接；层次表（tier taxonomy）规定每类事实属于哪一层。</li>
+<li><strong>上下文经济学是硬约束</strong>。根指令 ≤1,950 词、子树 ≤600 词，用 gate 而不是自觉来保证——因为每届会话都要载入这些内容。</li>
+<li><strong>冻结历史，而非改写历史</strong>。归档 append-only + 哈希封存；改决策 = 新 note + 互链。"现在的文档描述现状，历史只活在 note/commit/postmortem 里"。</li>
+<li><strong>闭集 + 显式扩展</strong>。类型、事件、note 分类都做成闭集，扩集要求同时更新代码与规范两处，由 gate 强制同步。</li>
+<li><strong>语义校准优于机械阈值</strong>。归档/删除按"未来决策价值"判断，明说字数、年龄、配额都不是标准，用校准样例传达尺度——这是 gate（机械）与技能（语义）的分工边界。</li>
+<li><strong>gate 与技能是一对</strong>：gate 管不变量（能自动判对错），技能管流程与判断（何时做、按什么标准做、边界情况怎么裁量），技能的收尾永远是"去跑这些 gate"。</li>
+</ol>
+<hr />
+<h2>6. 对我们自己实践的启示</h2>
+<p>在 <code>learnDSH/</code>（模仿实现）和 <code>plugins/</code>（插件开发）中可以按规模裁剪这套体系：</p>
+<p><strong>最小可行版（任何项目都值得）</strong>
+- 一个精炼的根 <code>AGENTS.md</code>：每条规则 1~3 行 + 链接理由；不追求字数 gate，但保持"规则短、理由有家"的纪律。
+- <code>notes/</code> 按 <code>proposed / implemented / rejected</code> 三分，文件名带日期前缀；<strong>强制 <code>## Alternatives considered</code></strong>——这是整套体系性价比最高的一条。
+- 立"改决策开新 note 互链，不重写旧 note"的规矩。
+- 不建 INDEX.md，目录即索引。</p>
+<p><strong>进阶（当团队/多 agent 协作变多）</strong>
+- class 分类闭集 + 一个几十行的目录 walker 脚本（参照 <code>agent-note-tree.ts</code>，核心就是一个 readdir + 白名单校验）。
+- note 格式 gate（头三行 + 骨架章节名），挂在 lint 流程里。
+- "非平凡变更必须同 PR 带 note"写进 AGENTS.md 的 Conventions。</p>
+<p><strong>做 agent 产品本身的参考</strong>
+- event-sourced sessions 这篇 note 本身就是 DSH 核心设计（session 可回放、消息历史是派生视图）的浓缩版，做 agent 记忆/持久化设计时值得先读。
+- AGENTS.md 不只是"给人看的约定"，也是产品能力：DSH 仓库里 <code>snapshots/session/agent-instructions/</code> 的夹具表明 harness 自身就有加载/嵌套 AGENTS.md 的机制与快照测试——指令文件是产品的一等公民。</p>
+<hr />
+<h2>附：源码导航</h2>
+<table>
+<thead>
+<tr>
+<th>内容</th>
+<th>路径</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>根指令</td>
+<td><code>AGENTS.md</code>（<code>CLAUDE.md</code> 是其符号链接）</td>
+</tr>
+<tr>
+<td>文档标准（tier 表、预算、行文规则）</td>
+<td><code>docs/AGENTS.md</code></td>
+</tr>
+<tr>
+<td>Agent Note 完整规范</td>
+<td><code>.agents/notes/README.md</code>（中文版 <code>README.zh.md</code>）</td>
+</tr>
+<tr>
+<td>notes 入口 / implemented 补充规则 / 归档规则</td>
+<td><code>.agents/notes/AGENTS.md</code>、<code>implemented/AGENTS.md</code>、<code>archived/AGENTS.md</code></td>
+</tr>
+<tr>
+<td>note 树闭集与 walker</td>
+<td><code>scripts/agent-note-tree.ts</code></td>
+</tr>
+<tr>
+<td>note 格式 gate</td>
+<td><code>scripts/verify-agent-note-format.ts</code></td>
+</tr>
+<tr>
+<td>归档封存 gate</td>
+<td><code>scripts/verify-archived-agent-notes.ts</code></td>
+</tr>
+<tr>
+<td>归档工作流技能（含校准样例）</td>
+<td><code>.agents/skills/dsh-archive-agent-notes/SKILL.md</code></td>
+</tr>
+<tr>
+<td>其他技能</td>
+<td><code>.agents/skills/*/SKILL.md</code>（12 个）</td>
+</tr>
+<tr>
+<td>gate 聚合器</td>
+<td><code>scripts/run-gates.ts</code>（<code>pnpm run doc-sync</code>）</td>
+</tr>
+<tr>
+<td>字数预算</td>
+<td><code>scripts/doc-budgets.manifest.json</code></td>
+</tr>
+<tr>
+<td>样例 note</td>
+<td><code>.agents/notes/implemented/architecture/2026-06-11-event-sourced-sessions.md</code></td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>
