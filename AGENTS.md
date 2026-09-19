@@ -11,6 +11,7 @@
 | `deepseek-harness/` | 从 GitHub 克隆的 DSH 官方源码库，版本会随 GitHub 上的更新定期拉取（`git pull`） |
 | `DeepSeek-Harness-使用手册.html` | DSH 使用手册（本地文档，基于某一版本源码生成） |
 | `deepseek-harness-tutorial.html` | DSH 教程（本地文档，基于某一版本源码生成） |
+| `DeepSeek-Harness-设计沉淀.md` | DSH 的 AGENTS.md 体系、Agent Notes 与 Gate 脚本设计思路沉淀（基于特定版本源码整理，见文首版本说明） |
 
 ## 使用约定
 
