@@ -1,0 +1,6 @@
+# DSH 上游源码（本地只读参考，不纳入本仓库；更新方式：cd deepseek-harness && git pull）
+/deepseek-harness/
+
+# 系统垃圾文件
+.DS_Store
+Thumbs.db
