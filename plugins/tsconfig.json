@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "target": "es2023",
+    "lib": ["es2023"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "typeRoots": ["D:/deepseek harness/deepseek-harness/node_modules/@types"],
+    "types": ["node"],
+    "paths": {
+      "@deepseek-ai/cordis": ["D:/deepseek harness/deepseek-harness/vendor/cordis/lib/types/index.d.ts"],
+      "@deepseek-ai/schemastery": ["D:/deepseek harness/deepseek-harness/vendor/schemastery/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-subagent": ["D:/deepseek harness/deepseek-harness/packages/subagent/subagent/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-subprocess": ["D:/deepseek harness/deepseek-harness/packages/subprocess/subprocess/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-brand": ["D:/deepseek harness/deepseek-harness/packages/util/brand/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-timeout": ["D:/deepseek harness/deepseek-harness/packages/util/timeout/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-llm": ["D:/deepseek harness/deepseek-harness/packages/llm/llm/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-session": ["D:/deepseek harness/deepseek-harness/packages/core/session/lib/types/index.d.ts"]
+    }
+  },
+  "include": ["cursor-subagent/src", "zcode-subagent-provider/src"]
+}

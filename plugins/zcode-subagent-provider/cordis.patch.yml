@@ -1,0 +1,12 @@
+# Local bundle layer: register the dormant ZCode CLI provider on the Host
+# plane, then expose it to the model through one delegation tool row.
+- insert:
+    - id: subagent-zcode
+      name: dsh-plugin-subagent-zcode
+    - id: tool-subagent-zcode
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: zcode
+        toolName: subagent_zcode
+        backgroundMode: one-shot
+        maxDepth: provider-managed

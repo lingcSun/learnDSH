@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DeepSeek Harness（dsh）使用手册 · 适用版本 v0.1.3-alpha.1</title>
+<title>DeepSeek Harness（dsh）使用手册 · 适用版本 v0.1.7-rc.1</title>
 <style>
   :root{
     --bg:#f7f8fa; --paper:#ffffff; --ink:#1f2430; --ink-2:#4b5563; --ink-3:#8b93a1;
@@ -137,7 +137,7 @@
 <body>
 
 <header class="hero">
-  <div class="kicker">DeepSeek Harness · 使用手册 · v0.1.3-alpha.1</div>
+  <div class="kicker">DeepSeek Harness · 使用手册 · v0.1.7-rc.1</div>
   <h1>DeepSeek Harness（dsh）使用手册</h1>
   <p class="sub">
     DeepSeek Harness（命令行工具名 <code style="background:rgba(255,255,255,.14);border:none;color:#e0e7ff;">dsh</code>）是 DeepSeek 开源的全插件化 Agent Harness，
@@ -146,11 +146,11 @@
   </p>
   <div class="badges">
     <span class="badge">GitHub：deepseek-ai/deepseek-harness</span>
-    <span class="badge">适用版本：dsh v0.1.3-alpha.1</span>
-    <span class="badge">对应源码：master@d347e70（2026-09-04）</span>
+    <span class="badge">适用版本：dsh v0.1.7-rc.1</span>
+    <span class="badge">对应源码：master@46a7f68（2026-09-23，即 tag dsh-v0.1.7-rc.1）</span>
     <span class="badge">MIT 开源</span>
     <span class="badge warn">Developer Preview · 可能存在破坏性变更</span>
-    <span class="badge">手册整理日期：2026-09-05</span>
+    <span class="badge">手册整理日期：2026-09-24（自 v0.1.5-rc.2 版修订）</span>
   </div>
 </header>
 
@@ -200,7 +200,7 @@
 <!-- ═══════════ 版本适配说明 ═══════════ -->
 <div class="callout warn">
   <span class="t">📌 版本适配说明（dsh 迭代很快，请先核对版本）</span>
-  本手册内容对应 <strong>dsh v0.1.3-alpha.1</strong>（源码 tag <code>dsh-v0.1.3-alpha.1</code>，commit <code>d347e70</code>，2026-09-04）。
+  本手册内容对应 <strong>dsh v0.1.7-rc.1</strong>（源码 tag <code>dsh-v0.1.7-rc.1</code>，master commit <code>46a7f68</code>，2026-09-23）。
   项目更新频繁、可能存在破坏性变更：阅读前请先用 <code>dsh -V</code> 或 <code>npx @deepseek-ai/dsh --version</code> 核对本机版本；
   若与本手册版本不一致，命令、配置与行为可能已有出入，请以 <a href="https://github.com/deepseek-ai/deepseek-harness">官方仓库文档</a> 为准。
 </div>
@@ -218,18 +218,21 @@
     <thead><tr><th style="width:130px;">模式</th><th>说明</th></tr></thead>
     <tbody>
       <tr><td><strong>Standard</strong></td><td>完整工具集：文件编辑、Shell、文件/网络搜索、技能（Skills）、规划（Planning）、目标（Goals）、子代理（Subagents）、工作流（Workflows）。日常开发默认模式。</td></tr>
-      <tr><td><strong>Code</strong></td><td>具备 Standard 的全部能力，但工具通过 <strong>Code Mode SDK</strong> 暴露，模型可以把多步操作写进一段 TypeScript 程序一次性编排执行。</td></tr>
-      <tr><td><strong>Minimal</strong></td><td>只有两个工具的极简编码代理（持久 Bash + str_replace_editor），用于在最小环境下做基准评测。</td></tr>
+      <tr><td><strong>PTC</strong></td><td>具备 Standard 的几乎全部能力，但工具通过 <strong>PTC-mode SDK</strong> 暴露，模型可以把多步操作写进一段 TypeScript 程序一次性编排执行（v0.1.5 前称 Code 模式，preset id 已由 <code>code</code> 更名 <code>ptc</code>；默认不提供 workflow 工具）。</td></tr>
+      <tr><td><strong>Minimal</strong></td><td>极简编码代理：v0.1.5 起只剩一个持久 Shell 工具（bash/PowerShell 按平台二选一，<code>str_replace_editor</code> 已移除，需要时经补丁加回），用于在最小环境下做基准评测。</td></tr>
       <tr><td><strong>Creator</strong></td><td>自定义 Agent 预设（preset）、运行时检视、内存中的插件实验与预设编写引导。</td></tr>
     </tbody>
   </table>
+  <p class="muted">这四种模式自 v0.1.5 起真实落地为仓库内的 agent preset（standard / ptc / minimal / cordis，UI 中显示为标准 / PTC / 极简 / 创造模式），在会话里随时切换，preset 选择记录进会话日志；rc 版起还可在设置里保存默认 preset，并开关「新会话可见的模式选择」（<code>modeSelectionEnabled</code>）。v0.1.5 时它们位于 <code>packages/preset/agent-presets/</code>，v0.1.7 已迁到 <code>packages/bundle/web-app/presets/</code> 下的四个 <code>*.patch.yml</code> 声明补丁——读源码时按新路径找。</p>
 
   <h3><span class="no">1.3</span>全程可追溯的会话日志</h3>
   <p>模型看到的一切都被记录在一条<strong>只追加（append-only）的会话日志</strong>里：系统提示词、推理、工具调用与结果、子代理调度、上下文注入等。Web UI 中的 Trajectory 视图可以按来源检查每条记录；<strong>续跑（Resume）、分叉（Fork）、搜索、回放（Replay）都作用于同一条事件流</strong>。这既是调试利器，也意味着“模型可见 ⟺ 已落日志”。</p>
+  <div class="callout tip"><span class="t">💡 v0.1.5 → v0.1.7 的 Web UI 新能力</span>
+  ① <strong>右侧边栏</strong>：每个会话有一个可分页签、可分栏/浮动/停靠的面板列，内置工作区<strong>文件树</strong>（惰性逐层加载）与<strong>文档预览</strong>——支持 Markdown、代码高亮（带行号，可从工具调用跳转到对应行）、图片（PNG/JPEG/GIF/WebP/BMP/ICO/SVG，SVG 脚本永不执行）、HTML（沙箱 iframe）、PDF，v0.1.7 又加入 <strong>Excel 电子表格</strong>预览（只读，支持多页签切换与触控板平移）；未知后缀回退纯文本。注意 Mermaid / Graphviz 图表目前<strong>没有</strong>应用内预览（文档站的 Mermaid 查看器是另一回事），聊天里的图表代码块仍按普通代码渲染。② <strong>消息反馈</strong>：每条助手消息可点赞/点踩并附说明与分类（不进模型上下文）。③ Artifact 交付卡片新增“用默认应用打开 / 在文件管理器中定位”操作。④ session-log 导出入口移到了页头 more-actions 菜单。⑤ v0.1.7 新增：聊天里的图片可<strong>点击放大预览</strong>；侧栏内置 <strong>Sidebar Browser</strong> 浏览器，消息里的链接可就地打开而不用跳出。</div>
 
   <div class="callout warn">
     <span class="t">⚠️ 开发者预览阶段</span>
-    项目处于 Developer Preview，官方明确说明<strong>会有破坏性兼容变更</strong>；运行前请阅读仓库中的 <code>SAFETY.md</code> 安全须知。本手册基于官方 master 分支 <strong>v0.1.3-alpha.1</strong>（commit <code>d347e70</code>，2026-09-04）的文档整理，个别细节请以官方文档为准。
+    项目处于 Developer Preview，官方明确说明<strong>会有破坏性兼容变更</strong>；运行前请阅读仓库中的 <code>SAFETY.md</code> 安全须知。本手册基于官方 master 分支 <strong>v0.1.7-rc.1</strong>（commit <code>46a7f68</code>，2026-09-23）的文档整理，个别细节请以官方文档为准。
   </div>
 </section>
 
@@ -245,8 +248,9 @@
 <span class="cmt"># 只启动服务，不自动打开浏览器（适合 SSH 远程，仅打印访问 URL）</span>
 <span class="cmd">npx @deepseek-ai/dsh web --no-open</span>
 
-<span class="cmt"># 指定端口（--port 属于 web 应用自身）</span>
+<span class="cmt"># 指定端口 / 绑定地址（--port、--host、--trusted-host 属于 web 应用自身）</span>
 <span class="cmd">dsh --profile web --port 8080</span></code></pre>
+  <p class="muted">web 应用自身的参数还有 <code>--host</code>（绑定地址）与 <code>--trusted-host</code>；<code>--host 0.0.0.0</code> 会被有意拒绝（防远程代码执行面），如需局域网访问请绑定具体内网地址并配置受信主机。<code>--port 0</code> 可让系统自动挑一个空闲端口。</p>
 
   <p><strong>方式二：源码运行</strong></p>
 <pre><code><span class="cmd">git clone https://github.com/deepseek-ai/deepseek-harness.git</span>
@@ -270,33 +274,59 @@
   <table>
     <thead><tr><th style="width:44%;">命令</th><th>作用</th></tr></thead>
     <tbody>
-      <tr><td><code>dsh web</code></td><td><code>--profile web</code> 的别名，启动 Web UI。</td></tr>
-      <tr><td><code>dsh --profile headless "任务描述"</code></td><td>一次性执行：新建一个持久化会话，打印最终答案后退出。适合脚本/CI 调用。</td></tr>
+      <tr><td><code>dsh web</code></td><td><code>--profile web</code> 的简写，启动 Web UI。v0.1.7 起任意 Profile 都可用 <code>dsh &lt;name&gt;</code> 简写（等价 <code>dsh --profile &lt;name&gt;</code>，<code>dsh plugin</code> 子命令除外）。</td></tr>
+      <tr><td><code>dsh --profile headless "任务描述"</code></td><td>一次性执行：新建一个持久化会话，打印最终答案后退出；也支持 stdin 任务、<code>--json</code> 机器可读事件流与 <code>--session-id</code> 续跑（见下方详解）。适合脚本/CI 调用。</td></tr>
       <tr><td><code>dsh --profile sdk</code></td><td>以 JSON-RPC stdio 向 SDK 客户端提供服务，直到关闭或断开。</td></tr>
       <tr><td><code>dsh --profile sdk-minimal</code></td><td>以独立的最小 Agent 树服务 SDK 客户端。</td></tr>
       <tr><td><code>dsh --profile acp</code></td><td>通过 ACP stdio 为自动化客户端提供服务。</td></tr>
-      <tr><td><code>dsh --profile &lt;name&gt;</code></td><td>引导自建 Profile（web/headless/sdk 等首次使用会从内置模板自动初始化，其余需 <code>dsh plugin</code> 安装插件）。</td></tr>
+      <tr><td><code>dsh --profile &lt;name&gt;</code></td><td>引导自建 Profile（web/headless/sdk 等首次使用会从内置模板自动初始化，其余需 <code>dsh plugin</code> 安装插件）。<code>desktop</code> 是保留名，CLI 会拒绝并提示它由 Electron 桌面应用独占管理。</td></tr>
+      <tr><td><code>dsh --from-default-profile &lt;template&gt;</code></td><td>从内置模板（web/headless/sdk/sdk-minimal/acp）一键初始化并启动一个自定义 Profile（v0.1.5 新增）。</td></tr>
       <tr><td><code>dsh plugin --profile &lt;name&gt; &lt;pnpm 参数&gt;</code></td><td>在 Profile 目录内转发 pnpm，管理该 Profile 的插件。</td></tr>
       <tr><td><code>dsh --patch &lt;file.cordis.yml&gt;</code></td><td>叠加 overlay 补丁层（启用 MCP、Webhook 等可选能力的主要方式，见 <a href="#s3-3">3.3</a>）。</td></tr>
-      <tr><td><code>dsh --dump-default-config</code> / <code>dsh --dump-config</code></td><td>不启动地打印默认/合成后的插件配置树，用于核查配置。</td></tr>
+      <tr><td><code>dsh --dump-default-config</code> / <code>dsh --dump-config</code> / <code>dsh --dump-config-schema</code></td><td>不启动地打印默认/合成后的插件配置树，用于核查配置；<code>--dump-config-schema</code>（v0.1.7 新增）把声明式配置导出为 <strong>JSON Schema</strong>，可拿去校验补丁文件结构。</td></tr>
     </tbody>
   </table>
   <p class="muted">参数切分规则：启动器无法识别的第一个参数开始属于应用本身，如 <code>dsh --profile web --help</code> 显示的是 web 应用的帮助。</p>
+
+  <h4>Headless 一次性任务：脚本 / CI 集成（v0.1.7 扩展）</h4>
+<pre><code><span class="cmt"># 基本用法：任务来自位置参数，最终答案打到 stdout，诊断走 stderr，完成后退出</span>
+<span class="cmd">dsh headless "运行测试并汇总失败原因"</span>
+
+<span class="cmt"># 从管道读任务（省略位置参数，或用单独的 - 占位；二者不能混用）</span>
+<span class="cmd">{ echo "总结这些改动："; git diff --stat; } | dsh headless</span>
+
+<span class="cmt"># 机器可读输出：--json 让 stdout 变成换行分隔的 JSON 事件流</span>
+<span class="cmd">dsh headless --json "检查依赖是否过期"</span>
+
+<span class="cmt"># 续跑一个已存在的持久化会话（id 不存在会直接报错，不会新建）</span>
+<span class="cmd">dsh headless --session-id session-xxxxxxxx "继续上一步，把报告写成中文"</span></code></pre>
+  <ul>
+    <li><strong>任务来源三选一</strong>：位置参数（多词按空格拼接）、省略时从 stdin 读、单独的 <code>-</code> 表示从 stdin 读；空白任务在运行前报错退出（退出码 1）。</li>
+    <li><strong>默认输出</strong>：stderr 流式打印模型推理（<code>dsh: reasoning:</code> 前缀），stdout 只有最终答案；退出码 0 = 完成、1 = 中止/出错。</li>
+    <li><strong><code>--json</code> 事件流</strong>：以 <code>session</code> 事件开头（含本次 <code>sessionId</code> 与 <code>cwd</code>）、<code>final</code> 事件结尾（完整答案），中间是 <code>status</code>（turn/step 起止）、<code>text</code>、<code>thinking</code>、<code>tool_call</code>、<code>tool_result</code> 事件；文本按步骤整段到达（非逐 token），单条超限会截断并标 <code>truncated</code>——它是投影，不是无损会话日志。</li>
+    <li><strong><code>--session-id</code> 续跑</strong>：只接受已持久化的会话，且要求 id 存在、非子代理/分叉会话、工作目录与 agent preset 一致；每次调用只跑一个任务、无交互追问，多轮自动化请用它分多次调用。</li>
+  </ul>
 
   <h3 id="s2-4"><span class="no">2.4</span>配置文件全景（Harness Home）</h3>
   <p>Harness Home 解析规则：<code>$DSH_HOME</code>，未设置则为 <code>~/.dsh</code>。典型的用户级文件布局：</p>
 <pre><code>~/.dsh/                          <span class="cmt">← Harness Home（$DSH_HOME）</span>
 ├── AGENTS.md                    <span class="cmt">← 用户级全局指令（对所有项目生效）</span>
 ├── settings.yaml                <span class="cmt">← 用户设置文档（各命名空间的键值）</span>
-├── .credentials.yaml            <span class="cmt">← 凭证文档（API Key 实际存放处，勿提交）</span>
+├── .credentials.yaml            <span class="cmt">← 凭证文档（API Key 实际存放处，勿提交；v0.1.5 起为 version:1 的 refs/records 版本化布局）</span>
+├── .env                         <span class="cmt">← 主目录层环境变量（分层 .env：继承环境 > 项目 .env > 此文件）</span>
 ├── cordis.patch.yml             <span class="cmt">← 机器级补丁层（如常驻 MCP 服务器）</span>
 ├── skills/                      <span class="cmt">← 用户级技能目录</span>
 └── profiles/
     └── &lt;name&gt;/
         ├── package.json         <span class="cmt">← dsh.profile 清单（有序 bundles）</span>
+        ├── pnpm-workspace.yaml  <span class="cmt">← hoisted linker 设置（随 Profile 初始化生成）</span>
+        ├── cordis.yml           <span class="cmt">← 空根配置（每次启动重写）</span>
         ├── node_modules/        <span class="cmt">← 该 Profile 安装的出树插件</span>
-        └── cordis.patch.yml     <span class="cmt">← Profile 级补丁层</span></code></pre>
-  <p>相关环境变量：<code>DSH_HOME</code>、<code>DSH_AGENTS_HOME</code>（默认 <code>~/.agents</code>）、<code>DSH_BUNDLED_SKILL_DIR</code>、<code>DEEPSEEK_API_KEY</code>、<code>DEEPSEEK_BASE_URL</code>。</p>
+        ├── cordis.patch.yml     <span class="cmt">← Profile 级补丁层</span>
+        └── compatibility.json   <span class="cmt">← 插件版本兼容豁免记录（v0.1.7 起，用过 allow-version 后出现，勿手改）</span></code></pre>
+  <p>相关环境变量：<code>DSH_HOME</code>、<code>DSH_AGENTS_HOME</code>（默认 <code>~/.agents</code>）、<code>DSH_BUNDLED_SKILL_DIR</code>、<code>DEEPSEEK_API_KEY</code>、<code>DEEPSEEK_BASE_URL</code>；另有 <code>DSH_TELEMETRY_DISABLED</code>（设为任意非空值即关闭遥测）与分层 <code>.env</code>（<code>PATH</code>/<code>NODE_OPTIONS</code>/代理等启动敏感变量只认最外层启动环境，防供应链投毒；代理变量仅允许写在 <code>$DSH_HOME/.env</code>）。</p>
+  <div class="callout tip"><span class="t">💡 桌面版（v0.1.5 新增，内部测试中）</span>
+  仓库新增了 Electron 桌面应用（<code>apps/desktop</code>，npm 包 <code>@deepseek-ai/dsh-desktop</code>，随 dsh 同版本发布）：dsh Web UI 的桌面壳，界面资源走 <code>dsh-app://</code> 协议、本机回环端口默认 <code>127.0.0.1:19387</code>（独立于 Web 的 3080，可用补丁覆盖），与 CLI 共享 <code>$DSH_HOME</code> 里的会话/设置/凭证，但使用独立的保留 Profile <code>profiles/desktop</code>。打包模型已定型：签名应用资源自带完整生产运行时（<code>extraResources/dsh</code>，壳与 dsh 一起签名更新），保留 Profile 只安装外部插件、核心依赖不再走安装。目前处于<strong>内部测试阶段、暂无面向普通用户的公开下载渠道</strong>（源码内可用 <code>pnpm run dev:desktop</code> 体验，打包目标为 macOS 与 Windows）；普通用户继续用 <code>npx @deepseek-ai/dsh web</code> 即可。</div>
 </section>
 
 <!-- ═══════════ 3. 构建项目的 Harness ═══════════ -->
@@ -306,7 +336,7 @@
   <table>
     <thead><tr><th style="width:30%;">文件 / 目录（项目级）</th><th>作用</th></tr></thead>
     <tbody>
-      <tr><td><code>AGENTS.md</code></td><td>项目说明书，内容注入系统提示词（见 3.1）。</td></tr>
+      <tr><td><code>AGENTS.md</code></td><td>项目说明书，内容注入首个请求前的持久上下文消息（见 3.1）。</td></tr>
       <tr><td><code>.dsh/skills/</code></td><td>项目技能目录（优先级最高的技能来源，见 3.2）。</td></tr>
       <tr><td><code>.agents/skills/</code></td><td>跨工具通用的项目技能目录（Claude Code 等也识别 <code>.agents/</code> 约定，便于一套技能多端复用）。</td></tr>
       <tr><td><code>$DSH_HOME/cordis.patch.yml</code></td><td>机器级/Profile 级补丁层，MCP 服务器等插件在此持久启用（见 3.3）。</td></tr>
@@ -316,14 +346,14 @@
 
   <!-- ── AGENTS.md ── -->
   <h3 id="s3-1"><span class="no">3.1</span>AGENTS.md：给代理的项目说明书</h3>
-  <p><code>AGENTS.md</code> 是 Harness 加载项目上下文的主要入口，由 <code>@deepseek-ai/dsh-agent-instructions</code> 插件注入系统提示词：</p>
+  <p><code>AGENTS.md</code> 是 Harness 加载项目上下文的主要入口，由 <code>@deepseek-ai/dsh-agent-instructions</code> 插件注入（v0.1.5 起以 user 角色的持久上下文消息、包 <code>&lt;system-reminder&gt;</code> 框架进入首个请求之前，而非系统提示词）：</p>
   <div class="flow">
     <span class="step">从会话工作目录逐级向上</span><span class="arr">→</span>
     <span class="step">命中项目根标记（如 .git）定为项目根</span><span class="arr">→</span>
-    <span class="step">按固定顺序加载同目录的指令文件（支持基线+叠加多个文件）</span><span class="arr">→</span>
-    <span class="step">按字节上限截断合并，注入系统提示词</span>
+    <span class="step">按固定顺序加载同目录的指令文件（支持基线+叠加多个文件，含 AGENTS.local.md / CLAUDE.local.md 本地叠加层）</span><span class="arr">→</span>
+    <span class="step">按字节上限截断合并（单文件默认 1 MiB，超限整体忽略），注入持久上下文</span>
   </div>
-  <p>两个层级：<strong>用户全局</strong> <code>$DSH_HOME/AGENTS.md</code>（固定位置，对所有项目生效）+ <strong>项目级</strong> <code>&lt;项目根&gt;/AGENTS.md</code>。同类约定也兼容 <code>CLAUDE.md</code>（DeepSeek Harness 仓库自身就是用 <code>CLAUDE.md</code> 软链到 <code>AGENTS.md</code>）。</p>
+  <p>两个层级：<strong>用户全局</strong> <code>$DSH_HOME/AGENTS.md</code>（固定位置，对所有项目生效）+ <strong>项目级</strong> <code>&lt;项目根&gt;/AGENTS.md</code>。同类约定也兼容 <code>CLAUDE.md</code>（DeepSeek Harness 仓库自身就是用 <code>CLAUDE.md</code> 软链到 <code>AGENTS.md</code>）；同目录基线之后可再叠 <code>AGENTS.local.md</code> / <code>CLAUDE.local.md</code> 本地补充（v0.1.5 起）。模型在会话中触达这些文件后，变更也会动态投影进上下文。</p>
 
   <h4>推荐写法：一份实用的项目 AGENTS.md 模板</h4>
   <p>官方仓库自己的 <a href="https://github.com/deepseek-ai/deepseek-harness/blob/master/AGENTS.md">AGENTS.md</a> 是绝佳范本，其结构值得照抄：① 开头一段定位 + “动 packages/ 前先读架构文档”；② 会话数据兼容性规则；③ 启动方式；④ 仓库布局；⑤ 常用命令；⑥ 失败处理原则；⑦ 密钥规则；⑧ 代码约定；⑨ 测试要求。模板：</p>
@@ -363,7 +393,7 @@
 
   <!-- ── Skills ── -->
   <h3 id="s3-2"><span class="no">3.2</span>Skills：把可复用方法论做成“技能”<span class="tag new">推荐</span></h3>
-  <p>技能（Skill）是一份<strong>可选指令文档</strong>：平时只在系统提示词里占一行“名字 + 描述”，当模型判断当前任务匹配时，再通过 <code>skill({ name })</code> 工具<strong>按需加载全文</strong>（渐进披露），从而用极小的上下文成本携带大量领域知识。技能名必须是 kebab-case（<code>^[a-z0-9]+(?:-[a-z0-9]+)*$</code>）。</p>
+  <p>技能（Skill）是一份<strong>可选指令文档</strong>：平时只在技能目录里占一行“名字 + 描述”（v0.1.5 起目录以 user 角色的持久会话消息注入、外层包 <code>&lt;system-reminder&gt;</code>，目录变化时发布完整替换版），当模型判断当前任务匹配时，再通过 <code>skill({ name })</code> 工具<strong>按需加载全文</strong>（渐进披露），从而用极小的上下文成本携带大量领域知识。用户也可以在消息里用 <code>/技能名</code> 直接加载技能全文（这是 <code>disable-model-invocation</code> 技能的唯一入口）。技能名必须是 kebab-case（<code>^[a-z0-9]+(?:-[a-z0-9]+)*$</code>）。</p>
 
   <h4>目录与优先级</h4>
   <table>
@@ -371,6 +401,7 @@
     <tbody>
       <tr><td>100（最高）</td><td>project-dsh</td><td><code>&lt;项目根&gt;/.dsh/skills</code></td></tr>
       <tr><td>200</td><td>project-agents</td><td><code>&lt;项目根&gt;/.agents/skills</code></td></tr>
+      <tr><td>250</td><td>runtime</td><td>程序化注册的技能（插件在运行时注入，v0.1.5 起）</td></tr>
       <tr><td>300</td><td>custom</td><td>配置项 <code>customSkillDirs</code> 指定的目录</td></tr>
       <tr><td>400</td><td>user-dsh</td><td><code>&lt;DSH_HOME&gt;/skills</code>（即 <code>~/.dsh/skills</code>）</td></tr>
       <tr><td>500</td><td>user-agents</td><td><code>&lt;agentsHome&gt;/skills</code>（即 <code>~/.agents/skills</code>）</td></tr>
@@ -406,7 +437,7 @@ user-invocable: true              <span class="cmt"># false = 只允许模型调
 ## 参考
 - 详细核对表见 references/checklist.md（相对技能目录解析）
 - 回滚脚本：scripts/rollback.sh</code></pre>
-  <p class="cap">模板说明：frontmatter 中两个策略键省略时默认均为 <code>true</code>；<code>description</code> 是路由依据，务必写清“做什么、何时用”。</p>
+  <p class="cap">模板说明：frontmatter 中两个策略键省略时默认均为 <code>true</code>（注意必须用连字符形式，camelCase 旧键如 <code>userInvocable</code> 现在会被直接拒绝）；另有可选 <code>metadata</code> 对象键（v0.1.5 起）；<code>description</code> 是路由依据，务必写清“做什么、何时用”。</p>
 
   <div class="callout tip"><span class="t">💡 技能写作要点</span>
   ① <code>description</code> 是模型决定“要不要加载这个技能”的唯一线索，要短而准；② <code>whenToUse</code> 是补充路由提示；③ 正文默认<strong>不缓存</strong>——每次调用都重读文件，改完立即生效，很适合迭代打磨；④ 只按需在正文中显式引用脚本/参考文档（加载结果不会枚举技能目录）；⑤ 五种组合的调用策略都被保留，敏感技能记得 <code>disable-model-invocation: true</code>。</div>
@@ -463,7 +494,7 @@ user-invocable: true              <span class="cmt"># false = 只允许模型调
 <pre><code><span class="cmt"># 启动官方记忆 MCP（先全局安装对应可执行文件，dsh 只负责拉起、不负责装包）</span>
 <span class="cmd">npm install --global memorix@1.3.0</span>
 <span class="cmd">npx @deepseek-ai/dsh web --patch "$PWD/apps/cli/config/examples/mcp-memory/memorix.cordis.yml"</span></code></pre>
-  <p class="muted">源码仓库的 <code>apps/cli/config/examples/</code> 下有 cordis、github-review、mcp-memory、schedule 四组官方 overlay 示例，可参考改写。</p>
+  <p class="muted">源码仓库的 <code>apps/cli/config/examples/</code> 下有 github-review、mcp-memory、schedule 三组官方 overlay 示例，可参考改写（v0.1.5 时的 cordis 组示例已移除）。</p>
 
   <h4>第 3 步：持久启用（写进补丁文件）</h4>
   <p>把 overlay 的 <code>insert</code> 条目<strong>合并</strong>（不要整文件覆盖，里面可能有你其他补丁）进：</p>
@@ -474,6 +505,7 @@ user-invocable: true              <span class="cmt"># false = 只允许模型调
 
   <h4>行为与安全细节</h4>
   <ul>
+    <li><strong>可选调优键</strong>（v0.1.5）：每个条目还接受 <code>toolCallTimeoutMs</code>（默认 60000）、<code>failOnStartupError</code>（默认 false）与 <code>reconnect</code> 子策略（<code>enabled / initialDelayMs / maxDelayMs / maxAttempts</code>）。</li>
     <li><strong>发现是异步的</strong>：启动后稍等，模型侧出现 <code>mcp__…</code> 工具才算就绪。</li>
     <li><strong>断线自愈</strong>：崩溃后自动带退避重连并重新同步工具；重连预算耗尽则注销工具，需 reload/重启恢复。</li>
     <li><strong>环境变量卫生</strong>：stdio 桥会剥掉疑似凭证类变量与全部 <code>DSH_*</code> 变量（其余继承）；服务器需要的额外密钥写在对应条目的 <code>config.env</code> 里。</li>
@@ -485,7 +517,7 @@ user-invocable: true              <span class="cmt"># false = 只允许模型调
   <div class="grid2">
     <div class="card">
       <h4>hooks.json（生命周期钩子）</h4>
-      <p>两个官方插件让 dsh 直接<strong>复用 Claude Code / Codex 的 hooks 格式</strong>：<code>dsh-hooks-claude-code</code> 与 <code>dsh-hooks-codex</code>，各自以 <code>configPath</code> 指向一个 <code>hooks.json</code>（或含 <code>hooks</code> 键的设置文件）。Claude Code 版支持 <code>${CLAUDE_PLUGIN_ROOT}</code> 与 <code>${CLAUDE_PROJECT_DIR}</code> 变量替换。</p>
+      <p>两个官方插件让 dsh 直接<strong>复用 Claude Code / Codex 的 hooks 格式</strong>：<code>dsh-hooks-claude-code</code> 与 <code>dsh-hooks-codex</code>，各自以 <code>configPath</code> 指向一个 <code>hooks.json</code>（或含 <code>hooks</code> 键的设置文件）。Claude Code 版支持 <code>${CLAUDE_PLUGIN_ROOT}</code> 与 <code>${CLAUDE_PROJECT_DIR}</code> 变量替换，事件点共 7 个（SessionStart、UserPromptSubmit、PreToolUse、PostToolUse、Stop，v0.1.5 新增 SubagentStart / SubagentStop）；目前只运行 command 类型 hook，<code>updatedInput</code>/<code>systemMessage</code> 仅记日志不生效。</p>
     </div>
     <div class="card">
       <h4>settings.yaml（行为微调）</h4>
@@ -497,7 +529,7 @@ user-invocable: true              <span class="cmt"># false = 只允许模型调
     </div>
     <div class="card">
       <h4>会话数据与存储</h4>
-      <p>会话持久化（JSONL）需要显式配置 <code>root</code> 目录（按 项目/会话 分子目录，支持 zstd）；另有 JSON / SQLite 存储后端与派生查询索引。均在 <code>cordis.yml</code> 合成层配置，可用 <code>dsh --dump-default-config</code> 查看默认值。</p>
+      <p>会话持久化目前只随包发布 <strong>JSONL 一个后端</strong>（需显式配置 <code>root</code> 目录，按 项目/会话 分子目录，支持 zstd；早期的 SQLite 会话后端已被移除）。会话格式已演进到 <strong>v4</strong>（v0.1.7 起）：文件名内嵌版本号（如 <code>session.v4.jsonl</code>），打开旧版本会话时自动做相邻版本迁移（…→v3→v4）且不改写源文件；v4 新增 <code>developer/message</code> 事件类型与消息内嵌生产者归属。另有派生查询索引（FTS5）。均在 <code>cordis.yml</code> 合成层配置，可用 <code>dsh --dump-default-config</code> 查看默认值。</p>
     </div>
   </div>
 </section>
@@ -527,8 +559,8 @@ user-invocable: true              <span class="cmt"># false = 只允许模型调
 
   <h4>模型如何使用（对模型暴露的工具）</h4>
   <ul>
-    <li><strong>委派工具</strong>：模型用 <code>{ description, prompt }</code> 发起委派。请求可带可选字段：<code>label</code>（标签）、<code>outputSchema</code>（结构化输出约束）、<code>maxDepth</code>（嵌套深度上限）、<code>toolFilter</code>（工具过滤）、<code>persona</code>（人格设定）、<code>agentOptions</code>。</li>
-    <li><strong>控制工具</strong>（<code>dsh-tool-subagent-control</code>）：<code>send_message</code>（向子代理发消息，经 <code>Agent.steer()</code> 进其收件箱）、<code>interrupt_agent</code>（打断）、<code>list_agents</code>（列出可续聊的子代理，状态机为 running / idle / ready）。</li>
+    <li><strong>委派工具</strong>：模型用 <code>{ description, prompt }</code> 发起委派，还可带可选的 <code>provider</code> / <code>model</code> / <code>reasoning_effort</code>（路由选择）与 <code>run_in_background</code>。另有一批约束字段（<code>label</code>、<code>outputSchema</code>、<code>maxDepth</code>、<code>toolFilter</code>、<code>persona</code>、<code>agentOptions</code>）由插件配置提供给委派服务层（服务层的 <code>label</code> 即模型侧的 <code>description</code>）。Standard 模式还自带 <code>dsh-tool-ralph</code>（基于 spawn provider 的循环委派工具）。</li>
+    <li><strong>控制工具</strong>（<code>dsh-tool-subagent-control</code>）：<code>send_message</code>（向子代理发消息，经 <code>Agent.steer()</code> 进其收件箱）、<code>interrupt_agent</code>（打断）；<code>list_agents</code> 由配套的 list-agents 子插件提供（列出可续聊的子代理，状态机为 running / idle / ready）。</li>
   </ul>
 
   <h4>两种运行模式</h4>
@@ -536,7 +568,7 @@ user-invocable: true              <span class="cmt"># false = 只允许模型调
     <thead><tr><th style="width:130px;">模式</th><th>行为</th></tr></thead>
     <tbody>
       <tr><td><strong>One-shot</strong><br>（一次性）</td><td>前台委派、用完即弃。返回一个 <code>SubagentResult</code>：<code>output</code>（正文）、可选 <code>structured</code>（按 outputSchema 的结构化数据）、可选 <code>diagnostic</code>（≤4096 UTF-8 字节的诊断信息）和 <code>stopReason</code>（<code>completed | aborted | error | max-tokens | refusal</code>）。</td></tr>
-      <tr><td><strong>Continuable</strong><br>（可续聊）</td><td>子代理是一个<strong>持久化子会话</strong>，进程内至多一个激活。只在直接父子之间经 <code>send_message</code> 通信（收件箱是唯一队列）；子代理结算时向父代理投递 <code>subagent-settled</code> 通知；<code>interrupt()</code> 打断但不清空其待办收件箱。</td></tr>
+      <tr><td><strong>Continuable</strong><br>（可续聊）</td><td>子代理是一个<strong>持久化子会话</strong>，每个子会话至多一个激活。只在直接父子之间经 <code>send_message</code> 通信（收件箱是唯一队列）；子代理结算时向父代理投递 <code>subagent-settled</code> 通知；<code>interrupt()</code> 打断但不清空其待办收件箱。</td></tr>
     </tbody>
   </table>
 
@@ -558,6 +590,17 @@ user-invocable: true              <span class="cmt"># false = 只允许模型调
     <li><strong>控制</strong>：<code>interrupt</code> 可停某队员当前轮次（不清其收件箱）；<code>waitForChange</code>（10 秒–1 小时）用于等待任务板变化。</li>
   </ul>
   <p class="muted">适用场景：多文件重构、并行调研 + 汇总、长任务流水线。注意 writeScopes 是“君子协定”，真正的文件写入仍受权限与沙箱约束。</p>
+
+  <h4>启用方式（v0.1.5-alpha.2 起公开发布为 experimental 包）</h4>
+  <p>Agent Teams 不在任何官方 Profile 里默认开启，需要给 Profile 安装发布到 npm 的实验包（experimental 家族在 v0.1.7 时已扩到约 20 个包，版本随仓库主版本走，当前为 <code>0.1.7-rc.1</code>）：</p>
+<pre><code><span class="cmt"># 前提：profile 已含 @deepseek-ai/dsh-base，且配置了持久会话存储（如 dsh-session-persistence-jsonl）</span>
+<span class="cmd">dsh plugin --profile &lt;name&gt; add @deepseek-ai/dsh-experimental-agent-team-profile</span></code></pre>
+  <ul>
+    <li>核心包：<code>dsh-experimental-agent-team</code>（服务，<code>ctx.agentTeams</code>）、<code>dsh-experimental-tool-agent-team</code>（模型工具）、<code>dsh-experimental-agent-team-profile</code>（profile + Web 层——v0.1.7 起原独立的 web-profile 包已并入，装这一个包即可）、<code>dsh-experimental-client-ui-agent-team</code>（Web UI）。</li>
+    <li>模型侧共 9 个工具：<code>spawn_teammate</code>、<code>send_message</code>、<code>list_agents</code>、<code>wait_agent</code>、<code>interrupt_agent</code>、<code>team_task_create / list / get / update</code>。启用后 profile 补丁会禁用全局 <code>tool-subagent-control</code> / <code>list-agents</code>（同名工具由 team 域接管），并把 <code>subagent</code> / <code>subagent_fork</code> 固定为 one-shot。</li>
+    <li>默认限额：maxMembers=16（v0.1.7 起由 8 上调）、maxTasks=256、每成员待投消息 64 条、单消息 65536 字节。</li>
+    <li><strong>实验性注意事项</strong>（官方 README 明示）：无稳定性承诺；单进程 + 共享 checkout（无 worktree/文件锁，writeScopes 仅建议性）；花名册扁平不可变（无嵌套/改名/删名）；任务所有权不自动释放；信箱不保证跨进程 exactly-once。详见 <code>docs/user/guide/agent-team.md</code> 与 <code>docs/subsystems/agent-team.md</code>。</li>
+  </ul>
 
   <!-- ── Workflows ── -->
   <h3 id="s4-3"><span class="no">4.3</span>Workflows：脚本化编排子代理 <span class="tag exp">进阶</span></h3>
@@ -588,11 +631,12 @@ user-invocable: true              <span class="cmt"># false = 只允许模型调
   <!-- ── Sessions ── -->
   <h3 id="s4-4"><span class="no">4.4</span>会话管理：续跑 / 分叉 / 回放</h3>
   <ul>
-    <li><strong>Resume</strong>：从持久化会话继续（如终端示例 <code>dsh --profile tui --resume &lt;id&gt;</code>）。</li>
+    <li><strong>Resume</strong>：从持久化会话继续（如终端示例 <code>dsh --profile tui --resume &lt;id&gt;</code>；tui 是自定义 profile 示例，非内置）。</li>
     <li><strong>Fork</strong>：从任意事件分叉出新会话（fork 的子代理继承父上下文即源于此）。</li>
     <li><strong>Search / Replay</strong>：会话查询服务支持有界读取、关系追踪、语义过滤与全文分页；回放按同一条事件流进行。</li>
     <li><strong>压缩（Compaction）</strong>：上下文过长时触发压缩事件与 CompactionEngine 摘要，长期任务不丢关键信息。</li>
-    <li><strong>Spill</strong>：超长文本可卸载为 spill 文件（默认在 OS 私有临时目录，默认保留 30 天）。</li>
+    <li><strong>Spill</strong>：超长文本可卸载为 spill 文件（默认在 OS 私有临时目录，默认保留 30 天；v0.1.5 起会话引用捕获也走 spill）。</li>
+    <li><strong>会话格式 v4</strong>（v0.1.7 起）：在 v3（系统提示词落为会话开头的合成 <code>system/message</code> 事件、preset 名 <code>code</code> 更名 <code>ptc</code>、事件信封规范化）基础上，新增 <code>developer/message</code> 事件与消息内嵌生产者归属。历史文件永不重写：打开旧版本会话时在内存中逐级迁移（v0→v1→v2→v3→v4），仅续写时才发布新版本后继文件（源文件路径/字节不变）。</li>
   </ul>
 
   <!-- ── Permissions ── -->
@@ -622,8 +666,8 @@ user-invocable: true              <span class="cmt"># false = 只允许模型调
         claude-sonnet-4-5:
           input: [text]
   <span class="key">llm-deepseek</span>:
-    <span class="key">reasoningEffort</span>: max                   <span class="cmt"># DeepSeek 官方路由的默认推理力度</span></code></pre>
-  <p class="muted">其他可用项：每模型的 <code>reasoningEfforts</code> 映射、思维默认开启的模型配 <code>compat.thinkingFormat: deepseek</code>、兼容开关（如 <code>supportsDeveloperRole</code>、<code>maxTokensField</code>）。改动后下一次请求即生效。</p>
+    <span class="key">reasoningEffort</span>: high                  <span class="cmt"># DeepSeek 官方路由的推理力度（省略时默认即 high）</span></code></pre>
+  <p class="muted">其他可用项：每模型的 <code>reasoningEfforts</code> 映射、思维默认开启的模型配 <code>compat.thinkingFormat: deepseek</code>、兼容开关（如 <code>supportsDeveloperRole</code>、<code>maxTokensField</code>）。改动后下一次请求即生效。rc 版起 DeepSeek 官方目录新增 <code>deepseek-flash</code>（V41-Flash：文本+图像输入，支持 <code>in-history</code> 系统提示词热更新——提示词变化以追加新 system 消息的方式保持前缀缓存）。</p>
 
   <!-- ── Others ── -->
   <h3 id="s4-7"><span class="no">4.7</span>定时任务、Webhook 与插件开发</h3>
@@ -631,7 +675,7 @@ user-invocable: true              <span class="cmt"># false = 只允许模型调
     <li><strong>Schedule（定时/提醒）</strong>：会话本地提醒与持久化转移，属可选 overlay（<code>apps/cli/config/examples/schedule/</code>）。</li>
     <li><strong>Webhook + GitHub Review</strong>：经过鉴权的 provider 推送可编程地创建工作区会话，用于“GitHub 上收到评审事件 → 自动开会话处理”（可选 overlay）。</li>
     <li><strong>插件开发</strong>：能力缝（Capability Seam）要求同时实现三个角色——Service Definition / Provider / Consumer；模型可见的变更必须可从会话日志重建。仓库 <code>docs/cookbook/</code> 有 “adding-a-tool”“adding-an-llm-adapter”“extension-cookbook” 等上手菜谱；自研插件打 <code>dsh-plugin</code> 主题标签发布。</li>
-    <li><strong>Python SDK</strong>：官方提供 Python 运行时（wheel 同样打包 <code>dsh</code> 命令）与 SDK 指南（<code>docs/user/guide/python-sdk.md</code>），<code>sdk</code> / <code>sdk-minimal</code> Profile 面向 SDK 客户端。</li>
+    <li><strong>Python SDK</strong>：官方提供 Python 运行时（wheel 同样打包 <code>dsh</code> 命令）与 SDK 指南（<code>docs/user/guide/python-sdk.md</code>），<code>sdk</code> / <code>sdk-minimal</code> Profile 面向 SDK 客户端。注意 v0.1.5 起 <code>sdk-minimal</code> 默认不带 <code>str_replace_editor</code> 与文件系统工具，需按指南用 <code>editor.patch.yml</code> 显式加回；wheel 附带的完整 <code>web</code> profile 是独立 CLI 应用，不能服务 Python SDK 客户端。</li>
   </ul>
 </section>
 
@@ -645,11 +689,12 @@ user-invocable: true              <span class="cmt"># false = 只允许模型调
         <tbody>
           <tr><td><code>dsh -V</code> / <code>dsh --version</code></td><td>查看版本号（核对手册适用版本）</td></tr>
           <tr><td><code>npx @deepseek-ai/dsh web</code></td><td>启动 Web UI</td></tr>
-          <tr><td><code>dsh --profile headless "任务"</code></td><td>一次性执行</td></tr>
+          <tr><td><code>dsh headless "任务"</code></td><td>一次性执行（<code>--json</code> 出事件流，<code>--session-id</code> 续跑）</td></tr>
           <tr><td><code>dsh --profile sdk</code></td><td>SDK JSON-RPC 服务</td></tr>
           <tr><td><code>dsh --patch &lt;overlay.yml&gt;</code></td><td>叠加补丁层</td></tr>
-          <tr><td><code>dsh --dump-config</code></td><td>查看合成配置</td></tr>
+          <tr><td><code>dsh --dump-config</code></td><td>查看合成配置（<code>--dump-config-schema</code> 导出 JSON Schema）</td></tr>
           <tr><td><code>dsh plugin --profile …</code></td><td>管理 Profile 插件</td></tr>
+          <tr><td><code>dsh --from-default-profile web</code></td><td>从内置模板初始化自定义 Profile（v0.1.5）</td></tr>
         </tbody>
       </table>
     </div>
@@ -662,6 +707,7 @@ user-invocable: true              <span class="cmt"># false = 只允许模型调
           <tr><td><code>DEEPSEEK_API_KEY</code></td><td>DeepSeek API 密钥</td></tr>
           <tr><td><code>DEEPSEEK_BASE_URL</code></td><td>自定义 API 端点</td></tr>
           <tr><td><code>DSH_BUNDLED_SKILL_DIR</code></td><td>内置技能目录覆盖</td></tr>
+          <tr><td><code>DSH_TELEMETRY_DISABLED</code></td><td>设为任意非空值关闭遥测（v0.1.5）</td></tr>
         </tbody>
       </table>
     </div>
@@ -696,6 +742,8 @@ user-invocable: true              <span class="cmt"># false = 只允许模型调
       <tr><td>技能没被加载</td><td>检查目录层级（只认 <code>&lt;name&gt;/SKILL.md</code> 或 <code>&lt;name&gt;.md</code> 两层，嵌套无效）；名字必须 kebab-case；确认优先级更高的同名技能没有遮蔽。</td></tr>
       <tr><td>AGENTS.md 没生效</td><td>确认文件位于项目根（含 <code>.git</code> 的目录）；文件过大触发字节上限截断；检查是否被同目录更高优先级的叠加文件覆盖。</td></tr>
       <tr><td>命令被沙箱拦截</td><td>按“最小粒度升级”调整沙箱/审批策略后重试；沙箱 fail-closed，不会静默放行。</td></tr>
+      <tr><td>插件安装/启动报 incompatible with dsh</td><td>v0.1.7 起强制校验插件对 dsh 的 peer 版本兼容：安装时直接拒绝（已有插件不受影响），启动时跳过/禁用不兼容 bundle 而非崩溃。确要强装需授予<strong>精确版本</strong>豁免：<code>dsh plugin --profile &lt;name&gt; allow-version &lt;包名&gt;@&lt;版本&gt; --dsh-version &lt;dsh精确版本&gt; --accept-risk</code>（记录在 Profile 的 <code>compatibility.json</code>；<code>revoke-version</code> 撤销、<code>version-exemptions</code> 查看），更稳妥的做法是升级插件或 dsh。</td></tr>
+      <tr><td>headless <code>--session-id</code> 续跑被拒</td><td>只接受<strong>已持久化</strong>的会话，且要求 id 存在、非子代理/分叉会话、工作目录与 agent preset 一致；开新会话请省略该参数（默认自动新建）。</td></tr>
     </tbody>
   </table>
 </section>
@@ -707,10 +755,11 @@ user-invocable: true              <span class="cmt"># false = 只允许模型调
     <li>官方介绍：<a href="https://www.deepseek.com/harness/en/">DeepSeek Harness — Everything is a Plugin</a></li>
     <li>源码仓库：<a href="https://github.com/deepseek-ai/deepseek-harness">deepseek-ai/deepseek-harness</a>（README / <code>SAFETY.md</code> / <code>AGENTS.md</code>）</li>
     <li>文档站：<a href="https://deepseek-harness.github.io/deepseek-harness/en/guide/quickstart">Quickstart</a> · 仓库内 <code>docs/</code>（config-catalog、subsystems/*、user/guide/*）</li>
-    <li>关键子系统文档：skills · subagent · agent-team · workflow · settings · mcp-memory · providers · system-prompt</li>
-    <li>官方 MCP overlay 示例：<code>apps/cli/config/examples/</code>（cordis / github-review / mcp-memory / schedule）</li>
+    <li>关键子系统文档：skills · subagent · agent-team · workflow · settings · mcp-memory · providers · system-prompt · session-format-status</li>
+    <li>官方 MCP overlay 示例：<code>apps/cli/config/examples/</code>（github-review / mcp-memory / schedule）</li>
     <li>社区插件：<a href="https://github.com/topics/dsh-plugin">GitHub Topic: dsh-plugin</a> · 社区资源合集 <a href="https://github.com/Dominic789654/awesome-deepseek-harness/blob/main/README.zh-CN.md">awesome-deepseek-harness</a></li>
     <li>Cordis 框架：<a href="https://github.com/cordiverse/cordis">cordiverse/cordis</a></li>
+    <li>实验性 Agent Teams：<code>docs/user/guide/agent-team.md</code> · <code>docs/subsystems/agent-team.md</code>（v0.1.5 起 npm 包已公开）</li>
   </ul>
 </section>
 
@@ -734,7 +783,7 @@ user-invocable: true              <span class="cmt"># false = 只允许模型调
 <a class="top-link" href="#" title="回到顶部">↑</a>
 
 <footer>
-  DeepSeek Harness（dsh）使用手册 · 适用版本 <strong>v0.1.3-alpha.1</strong>（源码 master@d347e70，2026-09-04；手册整理于 2026-09-05）·
+  DeepSeek Harness（dsh）使用手册 · 适用版本 <strong>v0.1.7-rc.1</strong>（源码 master@46a7f68，2026-09-23；手册整理于 2026-09-24，自 v0.1.5-rc.2 版修订）·
   依据官方 README、deepseek.com/harness 与 deepseek-harness.github.io 文档整理 ·
   项目处于 Developer Preview、更新频繁，配置与命令可能随版本变化，请以官方文档为准。标注“示意”的代码为结构说明，非逐字官方示例。
 </footer>

@@ -1,0 +1,12 @@
+# Local bundle layer: register the dormant Cursor CLI provider on the Host
+# plane, then expose it to the model through one delegation tool row.
+- insert:
+    - id: subagent-cursor
+      name: dsh-plugin-subagent-cursor
+    - id: tool-subagent-cursor
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: cursor
+        toolName: subagent_cursor
+        backgroundMode: one-shot
+        maxDepth: provider-managed

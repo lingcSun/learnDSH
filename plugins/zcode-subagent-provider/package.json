@@ -1,0 +1,17 @@
+{
+  "name": "dsh-plugin-subagent-zcode",
+  "description": "One-shot ZCode CLI subagent provider over `zcode.cjs --prompt --json`",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

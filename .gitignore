@@ -1,6 +1,22 @@
-# DSH 上游源码（本地只读参考，不纳入本仓库；更新方式：cd deepseek-harness && git pull）
+# DSH 上游源码（本地只读参考，独立 git 仓库，不纳入本仓库；更新方式：cd deepseek-harness && git pull）
 /deepseek-harness/
 
+# 依赖与构建产物
+node_modules/
+
+# 环境与密钥（安全兜底）
+.env
+.env.*
+*.credentials.yaml
+
+# 临时与日志
+*.log
+
 # 系统垃圾文件
-.DS_Store
 Thumbs.db
+Desktop.ini
+.DS_Store
+
+# 本地工作数据，不入仓库
+/azure/
+/tmp/
