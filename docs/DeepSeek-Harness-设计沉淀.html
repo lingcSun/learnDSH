@@ -4,52 +4,121 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DeepSeek Harness 设计沉淀：AGENTS.md 体系、Agent Notes 与 Gate 脚本</title>
-<style>body {
+<style>:root{
+  --ink:#1f2328; --ink-2:#57606a; --ink-3:#8b93a1;
+  --line:#e5e8ee; --line-2:#d8dee4;
+  --bg:#f7f8fa; --paper:#ffffff;
+  --code-bg:#f6f8fa;
+  --brand:#4f46e5; --brand-soft:#eef2ff;
+}
+*{box-sizing:border-box}
+body {
   font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC",
     "Hiragino Sans GB", sans-serif;
-  max-width: 880px;
+  max-width: 900px;
   margin: 0 auto;
-  padding: 40px 24px 80px;
-  line-height: 1.75;
-  color: #1f2328;
+  padding: 40px 24px 96px;
+  line-height: 1.78;
+  color: var(--ink);
   font-size: 16px;
+  background: var(--bg);
 }
-h1, h2 { border-bottom: 1px solid #d8dee4; padding-bottom: 8px; margin-top: 2em; }
-h1 { font-size: 1.9em; margin-top: 0.5em; }
-h2 { font-size: 1.4em; }
-h3 { font-size: 1.15em; margin-top: 1.6em; }
+#page {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 40px 48px 56px;
+  box-shadow: 0 1px 2px rgba(16,24,40,.04);
+}
+h1, h2 { border-bottom: 1px solid var(--line-2); padding-bottom: 8px; }
+h1 { font-size: 1.9em; margin: 0 0 .8em; line-height:1.35; }
+h2 { font-size: 1.4em; margin-top: 2.2em; }
+h3 { font-size: 1.15em; margin-top: 1.7em; }
+h4 { font-size: 1.02em; margin-top: 1.5em; color: var(--ink-2); }
 a { color: #0969da; text-decoration: none; }
 a:hover { text-decoration: underline; }
 code {
   font-family: Consolas, "JetBrains Mono", "Cascadia Code", monospace;
-  background: #f6f8fa;
+  background: var(--code-bg);
+  border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 2px 6px;
-  font-size: 0.9em;
+  padding: 1px 5px;
+  font-size: .88em;
 }
 pre {
-  background: #f6f8fa;
-  border: 1px solid #e6eaef;
+  background: var(--code-bg);
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 14px 16px;
   overflow-x: auto;
-  line-height: 1.5;
+  line-height: 1.55;
 }
-pre code { background: none; padding: 0; font-size: 0.85em; }
+pre code { background: none; border: none; padding: 0; font-size: .85em; }
 blockquote {
-  border-left: 4px solid #d0d7de;
-  color: #57606a;
-  margin: 0 0 1em;
-  padding: 0 1em;
+  border-left: 4px solid var(--line-2);
+  color: var(--ink-2);
+  margin: 1em 0;
+  padding: .2em 1em;
 }
 table { border-collapse: collapse; margin: 1em 0; display: block; overflow-x: auto; }
-th, td { border: 1px solid #d0d7de; padding: 6px 14px; }
-th { background: #f6f8fa; }
+th, td { border: 1px solid var(--line-2); padding: 7px 14px; vertical-align: top; }
+th { background: var(--code-bg); text-align: left; }
 tr:nth-child(even) td { background: #fbfcfd; }
-hr { border: none; border-top: 1px solid #d8dee4; margin: 2em 0; }
-li > p { margin: 0.3em 0; }</style>
+hr { border: none; border-top: 1px solid var(--line-2); margin: 2.4em 0; }
+li > p { margin: .3em 0; }
+ol, ul { padding-left: 1.6em; }
+
+/* ── GitHub 风格提示块 ───────────────────────────────── */
+.alert {
+  border: 1px solid var(--line-2);
+  border-left: 4px solid var(--ink-3);
+  border-radius: 8px;
+  background: var(--paper);
+  padding: 12px 18px;
+  margin: 1.3em 0;
+}
+.alert > .alert-title {
+  display: block;
+  font-weight: 700;
+  margin-bottom: .3em;
+  color: var(--ink);
+}
+.alert > p { margin: .35em 0; }
+.alert > p:last-child { margin-bottom: 0; }
+.alert > :first-child { margin-top: 0; }
+.alert-note    { border-left-color: #4f46e5; background: #f5f6ff; }
+.alert-tip     { border-left-color: #1a7f37; background: #f2fbf5; }
+.alert-warn    { border-left-color: #9a6700; background: #fffbf0; }
+.alert-danger  { border-left-color: #cf222e; background: #fff5f5; }
+.alert-info    { border-left-color: #0969da; background: #f2f7fd; }
+.alert-goals   { border-left-color: #8250df; background: #f8f4ff; }
+.alert-practice{ border-left-color: #0f766e; background: #f1faf8; }
+
+/* ── 折叠块 ──────────────────────────────────────────── */
+details {
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: #fcfcfd;
+  padding: 10px 16px;
+  margin: 1.2em 0;
+}
+details[open] { background: var(--paper); }
+summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--brand);
+  padding: 2px 0;
+}
+summary:hover { color: #3730a3; }
+details[open] > summary { margin-bottom: .5em; padding-bottom: .4em; border-bottom: 1px dashed var(--line); }
+
+@media (max-width: 640px) {
+  body { padding: 16px 10px 60px; }
+  #page { padding: 22px 18px 32px; border-radius: 10px; }
+}</style>
 </head>
 <body>
+<div id="page">
 <h1>DeepSeek Harness 设计沉淀：AGENTS.md 体系、Agent Notes 与 Gate 脚本</h1>
 <blockquote>
 <p>基于 deepseek-harness 源码 <code>fb2c4b9e</code>（2026-09-10，0.1.5-rc.2 附近）整理。上游更新较快，细节以源码为准；源码在本目录 <code>deepseek-harness/</code> 下（只读参考）。</p>
@@ -340,5 +409,6 @@ Status: proposed   |   Status: implemented   |   Status: rejected — &lt;一行
 </tr>
 </tbody>
 </table>
+</div>
 </body>
 </html>
