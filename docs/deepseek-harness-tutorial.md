@@ -72,7 +72,7 @@ cd deepseek-harness
 >
 > **版本漂移了怎么办（三招）**：① 行号对不上——每个代码块都给了**符号名**（函数/类/常量/配置键），编辑器按名搜索永远比行号可靠；② 怀疑结构变了——用 `dsh --dump-config` 打印你本机真实插件树，对照 `docs/architecture.md`；③ 教材提到的标识符在你的版本里搜不到——先怀疑版本差异，在仓库里搜该符号的改名/迁移历史，再决定内容是否仍然成立。
 >
-> **从 v0.1.3-alpha.1 到 v0.1.7-rc.2 的三处结构性变化（复核时已就地更正）**：① CLI 入口从 `apps/cli/bin/dsh.js` 移到 **`apps/cli/src/bin.ts`**（参数解析拆到同级 `args.ts`）；② `packages/` 现在是**分类目录**，包被归入 `core/`、`llm/`、`sandbox/`、`session/`、`compaction/` 等子目录——旧路径按包名搜索即可；③ LLM 层的 `streamWithConnection()` **已不存在**，拆成适配器的 `generate()` + `request()` 两步，DeepSeek 适配器的 `serializeRequest` 已简化为 **`serialize`**，且 `llm-deepseek` 包已按职责拆成 20 余个文件。
+> **从 v0.1.3-alpha.1 到 v0.1.7-rc.2 的四处结构性变化（复核时已就地更正）**：① CLI 入口从 `apps/cli/bin/dsh.js` 移到 **`apps/cli/src/bin.ts`**（参数解析拆到同级 `args.ts`）；② `packages/` 现在是**分类目录**，包被归入 `core/`、`llm/`、`sandbox/`、`session/`、`compaction/` 等子目录——旧路径按包名搜索即可；③ LLM 层的 `streamWithConnection()` **已不存在**，拆成适配器的 `generate()` + `request()` 两步，DeepSeek 适配器的 `serializeRequest` 已简化为 **`serialize`**，且 `llm-deepseek` 包已按职责拆成 20 余个文件；④ **DeepSeek 适配器改走 Anthropic 兼容端点**——旧教材说它对接「DeepSeek（OpenAI 兼容）接口」，现 `llm-deepseek` 实为 fetch + SSE 对接 `api.deepseek.com/anthropic` 的 **Messages 协议**（`serialize()` 产 Messages 线格式、`translate()` 译 Messages SSE 事件，见 4.1/4.3）；第 0 章裸 agent 教学例仍用 chat/completions，属刻意保留的教学简化。
 
 ### 阅读约定
 
@@ -110,7 +110,7 @@ cd deepseek-harness
 
 ### 0.2 实操：写出你的第一个 agent
 
-下面这个程序**不含任何框架**，只用 Node.js 内置能力 + DeepSeek 的 OpenAI 兼容接口。它给模型一个工具 `read_file`，然后让它回答一个关于你电脑上文件的问题。
+下面这个程序**不含任何框架**，只用 Node.js 内置能力 + DeepSeek 的 OpenAI 兼容接口（教学选它是因为最通用、零依赖可逐行敲；dsh 本体的生产适配器走的则是 DeepSeek 的 **Anthropic 兼容端点**、Messages 协议，见第 4 章）。它给模型一个工具 `read_file`，然后让它回答一个关于你电脑上文件的问题。
 
 > [!PRACTICE] 🛠 实操 0-A：bare-agent.mjs（约 50 行）
 > 1. 在你的工作目录新建文件 `bare-agent.mjs`，内容如下（**完整可运行，直接抄**）：
@@ -251,7 +251,7 @@ mvn compile exec:java -Dexec.args="读一下 pom.xml 告诉我项目叫什么"
 | --- | --- | --- |
 | **工具清单随请求发** | 每次请求都把 `tools`（名称+描述+JSON Schema 参数）发给模型 | 工具 schema 在每次 step 前由 `system-prompt` 服务重新组装（第 4、5 章） |
 | **历史必须完整回放** | 模型的回复、工具结果都要 `push` 进 `messages`，一条不能少、顺序不能乱 | 会话事件日志 + `deriveMessages()` 投影（第 6 章） |
-| **工具结果用 role:'tool'** | 每条工具结果绑定 `tool_call_id`，与请求配对 | `tool/result` 事件 → 序列化为 `role:'tool'` 消息（第 4、6 章） |
+| **工具结果与请求配对** | 每条工具结果绑定 `tool_call_id`，与调用一一配对 | `tool/result` 事件 → 序列化为 user 消息里的 `tool_result` 块（`tool_use_id` 配对，第 4、6 章） |
 | **「没有工具调用」即结束** | 模型不再点菜 = 它认为任务完成 | `ReactLoopAgent.step()` 返回 `{ kind: 'completed' }`（第 3 章） |
 
 ### 0.4 裸 agent 的七宗罪：为什么要 harness
@@ -836,7 +836,7 @@ export async function executeToolCalls(ctx, turn, step, toolCalls, signal, accep
 
 <details markdown="1"><summary>2. 为什么工具结果要「按模型顺序」落日志，而不是谁先完成谁先写？</summary>
 
-因为下一轮请求的 messages 由日志投影而来，模型期待「我点的 5 个菜，5 个结果按我点单的顺序回来」——这是 OpenAI 兼容接口对 tool\_call\_id 配对的要求，更是模型推理连贯性的要求。并行是执行层的优化，**协议层必须保持模型序**。
+因为下一轮请求的 messages 由日志投影而来，模型期待「我点的 5 个菜，5 个结果按我点单的顺序回来」——这是线协议对工具调用配对的统一要求（OpenAI 兼容接口的 tool\_call\_id、Messages 协议的 tool\_use\_id 皆然），更是模型推理连贯性的要求。并行是执行层的优化，**协议层必须保持模型序**。
 
 </details>
 
@@ -857,7 +857,7 @@ export async function executeToolCalls(ctx, turn, step, toolCalls, signal, accep
 | --- | --- | --- |
 | **LlmRuntime**（`ctx.llm`） | `packages/llm/llm/src/index.ts` | 适配器注册表 + 统一入口 `stream()/prepareCall()`；统一错误码（AUTH/RATE\_LIMIT/TIMEOUT/CONTEXT\_WINDOW\_EXCEEDED…） |
 | **LlmAdapter**（抽象接缝） | 同上 | 抽象基类，核心约定只有一个方法：`stream(options) → AsyncIterable<StreamChunk>` |
-| **DeepSeekAdapter**（实现） | `packages/llm/llm-deepseek/src/` | fetch + SSE 对接 DeepSeek（OpenAI 兼容）接口；另有 `llm-pi-ai` 包走多家聚合后端，结构完全相同 |
+| **DeepSeekAdapter**（实现） | `packages/llm/llm-deepseek/src/` | fetch + SSE 对接 DeepSeek 的 **Anthropic 兼容端点**（`api.deepseek.com/anthropic`，Messages 协议，精读见 4.3）；另有 `llm-pi-ai` 包按 `openai-completions` / `openai-responses` / `anthropic-messages` 三种协议对接多家聚合后端 |
 
 回看第 3 章 `step()` 里那行 `this.loopCtx.llm.stream(request)`——循环层对「哪家模型、什么协议、如何重试」**一无所知**。这就是适配器接缝的意义：换模型 = 换一行清单配置（第 1 章 ① 行）。
 
@@ -910,37 +910,31 @@ packages/llm/llm-deepseek/src/serialize.ts（节选）
 ```
 /** Map system snapshots, tool changes, and conversation turns to Messages using the configured route capabilities. */
 export function serialize(/* … */): WireRequest {
-  const messages: WireMessage[] = []
-    messages.push({ role: 'system', content: options.system })   // 系统提示词排在最前
-  messages.push(...serializeMessages(options.messages))
-  return requestWithMessages(options, messages, defaults)
-}
-/* requestWithMessages 里：工具清单映射成 wire 形态
-   { type:'function', function:{ name, description, parameters } }
-   并始终带上 stream: true, stream_options:{ include_usage: true } */
-
-export function serializeMessages(messages: Message[]): WireMessage[] {
-  const wire: WireMessage[] = []
-  for (const message of messages) {
-    if (message.role === 'system') { wire.push({ role:'system', content: flattenText(...) }); continue }
-    if (message.role === 'assistant') { wire.push(serializeAssistant(message)); continue }
-    // user 角色：harness 词汇里工具结果搭在 user 消息里，DeepSeek 要独立的 role:'tool'
-    const toolResults = message.content.filter(b => b.type === 'tool-result')
-    const text = flattenText(message.content)
-    if (text.length > 0 || toolResults.length === 0) wire.push({ role: 'user', content: text })
-    for (const result of toolResults) {
-      wire.push({ role: 'tool', tool_call_id: result.toolCallId,
-        content: flattenText(result.content) || '(no output)' })   // 空输出也要有内容
-    }
+  // ……遍历 history，把 harness 消息块翻译成 Messages wire 块：
+  //   assistant → text / thinking（带 signature 回放）/ tool_use
+  //   工具结果  → { type: 'tool_result', tool_use_id, … } 搭在 role:'user' 消息里
+  //   system    → 不占消息位，攒到顶层 system 字段；相邻同角色消息合并
+  // 并校验：每个 tool_use 都必须有紧跟的 tool_result，否则整个请求拒绝
+  return {
+    model: options.model, stream: true, messages,
+    max_tokens: /* 必填 */,                    // Messages 的 max_tokens 必填，且含 thinking 预算
+    thinking: { type: effort === 'off' ? 'disabled' : 'enabled' },
+    ...effort === 'off' ? {} : { output_config: { effort } },
+    ...system.length === 0 ? {} : { system },   // 系统提示词在顶层，不在 messages 里
+    ...options.tools === undefined ? {} : {
+      tools: options.tools.map(tool => ({
+        name: tool.name, description: tool.description,
+        input_schema: tool.parameters,          // JSON Schema 直接内联，无 function 包装
+      })),
+    },
   }
-  return wire
 }
 ```
 
-还记得第 0 章的「历史必须完整回放」吗？这里是它的生产级版本：harness 内部有一套自己的消息词汇（text/image/tool-result/reasoning 块），序列化层负责把它**无损翻译**成目标厂商的方言——工具结果改角色、空输出补占位、系统消息置顶。
+还记得第 0 章的「历史必须完整回放」吗？这里是它的生产级版本：harness 内部有一套自己的消息词汇（text/image/tool-result/reasoning 块），序列化层负责把它**无损翻译**成目标厂商的方言——工具结果落进 user 消息的 tool\_result 块、系统提示词提到顶层 system 字段、reasoning 块回放成带签名的 thinking 块。
 
-> [!INFO] 📘 一段值得抄进笔记本的「战壕注释」（serializeAssistant，217–235 行）
-> 助手消息的 `content` 空时为什么发空字符串 `""` 而不是 `null`？源注释解释：纯工具调用轮次的 content 是空串，官方示例原样回放，**而一些网关遇到 null 会直接拒绝**；更隐蔽的是「纯推理轮次」（模型整轮只在 reasoning 通道说话），如果这里存了 null——由于消息已持久化在会话日志里——**这个会话之后每一轮都会被 400 打死**（"content or tool\_calls must be set"）。注释还解释了 `reasoning_content` 何时回传（思维链回传规则）。**读生产代码，一半的功力长在这种注释里。**
+> [!INFO] 📘 一段值得抄进笔记本的「战壕注释」（serialize.ts）
+> 历史回放的 assistant 工具调用参数在 harness 内部是 JSON 字符串，Messages 协议却要结构化对象——`toolInput()` 解析失败时**不报错、不臆造，回放成空对象 `{}`**，源注释原话："Historical arguments that Messages cannot represent use empty input; durable content stays unchanged"（不可表示的历史参数用空输入，持久内容保持不变）。同一文件还化解了一处协议错位：harness 允许 system 更新出现在历史中段，Messages 协议不允许——序列化层把它**顺延到紧随的 user 轮之后**再插入。**读生产代码，一半的功力长在这种注释里。**
 
 ### 4.4 流的另一半：SSE 解析与 chunk → 消息装配
 
@@ -955,7 +949,7 @@ export function serializeMessages(messages: Message[]): WireMessage[] {
 >
 > ``` // ---------- 流式版 agent loop ---------- const question = process.argv[2] ?? '写一首关于循环的打油诗' const messages = [{ role: 'user', content: question }] while (true) { const res = await fetch(API_URL, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${API_KEY}` }, body: JSON.stringify({ model: 'deepseek-chat', messages, tools, stream: true }), }) // —— SSE 解析器：data: 行 → JSON 对象（对应 dsh 的 parseSse）—— const reader = res.body.getReader() const decoder = new TextDecoder() let buf = '' let content = '' // 拼装完整回复（对应 BlockAssembler） const toolCalls = [] // 流式工具调用是「增量拼图」 while (true) { const { done, value } = await reader.read() if (done) break buf += decoder.decode(value, { stream: true }) let idx while ((idx = buf.indexOf('\n')) >= 0) { // 按行切 const line = buf.slice(0, idx).trim(); buf = buf.slice(idx + 1) if (!line.startsWith('data:')) continue const payload = line.slice(5).trim() if (payload === '[DONE]') continue const delta = JSON.parse(payload).choices?.[0]?.delta ?? {} if (delta.content) { // 文本增量 → 立刻上屏 content += delta.content process.stdout.write(delta.content) } for (const tc of delta.tool_calls ?? []) { // 工具调用增量 → 按索引拼图 toolCalls[tc.index] ??= { id: '', function: { name: '', arguments: '' } } if (tc.id) toolCalls[tc.index].id = tc.id if (tc.function?.name) toolCalls[tc.index].function.name += tc.function.name if (tc.function?.arguments) toolCalls[tc.index].function.arguments += tc.function.arguments } } } if (toolCalls.length === 0) break // 无工具调用 → 完成 console.log() // 换行收尾 messages.push({ role: 'assistant', content, tool_calls: toolCalls }) for (const call of toolCalls) { // 工具执行与第0章完全相同 const args = JSON.parse(call.function.arguments || '{}') console.log('🔧', call.function.name, args) let result; try { result = executeTool(call.function.name, args) } catch (e) { result = `工具执行出错: ${e.message}` } messages.push({ role: 'tool', tool_call_id: call.id, content: String(result) }) } } ```
 >
-> 跑一下，感受「字一个个蹦出来」与第 0 章「卡 20 秒憋大招」的区别。然后打开 `packages/llm/llm-deepseek/src/translate.ts` 对照：你手写的 `delta.content` / `tool_calls[i].index` 拼图逻辑，正是 `translate()` 中 `tool-call-delta` 块干的事——**你现在已经能读懂生产适配器的一半了**。
+> 跑一下，感受「字一个个蹦出来」与第 0 章「卡 20 秒憋大招」的区别。然后打开 `packages/llm/llm-deepseek/src/translate.ts` 对照：你手写的「按增量拼块」是同一件事，只是方言不同——Messages 协议的 `text_delta` 对应 `delta.content`，`input_json_delta` 分段到达的工具参数对应 `tool_calls[i].index` 拼图，思考内容则是独立的 `thinking_delta` 块——**你现在已经能读懂生产适配器的一半了**。
 
 <details markdown="1"><summary>☕ Java 流式版：StreamingAgent.java（手敲目标 · 与实操 4-A 等价）</summary>
 
@@ -2264,7 +2258,7 @@ declare module '@deepseek-ai/dsh-session/types' {
 
 <details markdown="1"><summary>Q2：没设 DEEPSEEK_API_KEY 会怎样？可以用别家模型吗？</summary>
 
-应用能启动、能看界面，发消息时报鉴权错误。可以用别家：dsh 有 OpenAI 兼容的多后端适配器（llm-pi-ai 包），或照 docs/cookbook/adding-an-llm-adapter 接任意 OpenAI 兼容端点——第 4 章讲过接缝为什么让这件事便宜。
+应用能启动、能看界面，发消息时报鉴权错误。可以用别家：dsh 的多后端适配器（llm-pi-ai 包）支持 openai-completions / openai-responses / anthropic-messages 三种协议，OpenAI 兼容网关与 Anthropic 兼容端点都能接；要接新后端，照 docs/cookbook/adding-an-llm-adapter 写适配器——第 4 章讲过接缝为什么让这件事便宜。
 
 </details>
 
