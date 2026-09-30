@@ -2,10 +2,10 @@
 
 DeepSeek Harness（命令行工具名 `dsh`）是 DeepSeek 开源的全插件化 Agent Harness， 理念是 **“Everything is a Plugin”**：模型、工具、技能（Skills）、会话、沙箱、存储、规划、目标、子代理（Subagents）、工作流全部以插件形式提供，可在不改源码的前提下自由组合与替换。 本手册覆盖：① 如何为项目构建 Harness（AGENTS.md、Skills、MCP）；② 进阶用法（Subagents、Agent Teams、Workflows 等）。
 
-GitHub：deepseek-ai/deepseek-harness 适用版本：dsh v0.1.7-rc.2 对应源码：master@477b4f42（2026-09-24） MIT 开源 Developer Preview · 可能存在破坏性变更 手册整理日期：2026-09-05 · 事实复核日期：2026-09-26
+GitHub：deepseek-ai/deepseek-harness 适用版本：dsh v0.2.0-rc.2 对应源码：master@639ed0153（2026-09-29） MIT 开源 Developer Preview · 可能存在破坏性变更 手册整理日期：2026-09-05 · 事实复核日期：2026-09-29
 
 > [!WARN] 📌 版本适配说明（dsh 迭代很快，请先核对版本）
-> 本手册内容对应 **dsh v0.1.7-rc.2**（源码 tag `dsh-v0.1.7-rc.2`，commit `477b4f42`，2026-09-24）；初稿基于 v0.1.3-alpha.1（commit `d347e70`，2026-09-04），2026-09-26 对照 v0.1.7-rc.2 源码完成一次事实复核。 项目更新频繁、可能存在破坏性变更：阅读前请先用 `dsh -V` 或 `npx @deepseek-ai/dsh --version` 核对本机版本； 若与本手册版本不一致，命令、配置与行为可能已有出入，请以 [官方仓库文档](https://github.com/deepseek-ai/deepseek-harness) 为准。
+> 本手册内容对应 **dsh v0.2.0-rc.2**（源码 tag `dsh-v0.2.0-rc.2`，commit `639ed0153`，2026-09-29）；初稿基于 v0.1.3-alpha.1（commit `d347e70`，2026-09-04），2026-09-26 对照 v0.1.7-rc.2 源码完成一次事实复核，2026-09-29 升级到 v0.2.0-rc.2 复核。 项目更新频繁、可能存在破坏性变更：阅读前请先用 `dsh -V` 或 `npx @deepseek-ai/dsh --version` 核对本机版本； 若与本手册版本不一致，命令、配置与行为可能已有出入，请以 [官方仓库文档](https://github.com/deepseek-ai/deepseek-harness) 为准。
 
 ## 认识 DeepSeek Harness
 
@@ -33,7 +33,7 @@ GitHub：deepseek-ai/deepseek-harness 适用版本：dsh v0.1.7-rc.2 对应源�
 模型看到的一切都被记录在一条**只追加（append-only）的会话日志**里：系统提示词、推理、工具调用与结果、子代理调度、上下文注入等。Web UI 中的 Trajectory 视图可以按来源检查每条记录；**续跑（Resume）、分叉（Fork）、搜索、回放（Replay）都作用于同一条事件流**。这既是调试利器，也意味着“模型可见 ⟺ 已落日志”。
 
 > [!WARN] ⚠️ 开发者预览阶段
-> 项目处于 Developer Preview，官方明确说明**会有破坏性兼容变更**；运行前请阅读仓库中的 `SAFETY.md` 安全须知。本手册基于官方 master 分支 **v0.1.7-rc.2**（commit `477b4f42`，2026-09-24）的文档整理，个别细节请以官方文档为准。
+> 项目处于 Developer Preview，官方明确说明**会有破坏性兼容变更**；运行前请阅读仓库中的 `SAFETY.md` 安全须知。本手册基于官方 master 分支 **v0.2.0-rc.2**（commit `639ed0153`，2026-09-29）的文档整理，个别细节请以官方文档为准。
 
 ## 安装与快速上手
 
@@ -71,7 +71,7 @@ pnpm dsh web
 3. **跑第一个任务：**例如输入“总结这个仓库，指出主要包的职责”，观察代理读文件、执行命令、委派子代理与维护计划的全过程。
 
 > [!TIP] 💡 环境变量方式
-> 也可以直接设置 `DEEPSEEK_API_KEY` 与 `DEEPSEEK_BASE_URL`；自定义 Provider 通常用 `apiKeyEnv` 引用环境变量而非内联密钥。见 [4.6 自定义模型 Provider](#s4-6)。
+> 也可以直接设置 `DEEPSEEK_API_KEY` 与 `DEEPSEEK_BASE_URL`；自定义 Provider 通常用 `apiKeyEnv` 引用环境变量而非内联密钥。见 4.6 节「自定义模型 Provider」。
 
 ### CLI 与运行 Profiles
 
@@ -85,8 +85,8 @@ pnpm dsh web
 | `dsh --profile sdk-minimal` | 以独立的最小 Agent 树服务 SDK 客户端。 |
 | `dsh --profile acp` | 通过 ACP stdio 为自动化客户端提供服务。 |
 | `dsh --profile <name>` | 引导自建 Profile（web/headless/sdk 等首次使用会从内置模板自动初始化，其余需 `dsh plugin` 安装插件）。 |
-| `dsh plugin --profile <name> <pnpm 参数>` | 在 Profile 目录内转发 pnpm，管理该 Profile 的插件。 |
-| `dsh --patch <file.cordis.yml>` | 叠加 overlay 补丁层（启用 MCP、Webhook 等可选能力的主要方式，见 [3.3](#s3-3)）。 |
+| `dsh plugin --profile <name> <pnpm 参数>` | 在 Profile 目录内转发 pnpm，管理该 Profile 的插件。另有三个 DSH 自有子命令：`allow-version` / `revoke-version` / `version-exemptions`（对某个包版本放行或收回版本豁免）。 |
+| `dsh --patch <file.cordis.yml>` | 叠加 overlay 补丁层（启用 MCP、Webhook 等可选能力的主要方式，见 3.3 节）。 |
 | `dsh --dump-default-config` / `dsh --dump-config` | 不启动地打印默认/合成后的插件配置树，用于核查配置。 |
 
 参数切分规则：启动器无法识别的第一个参数开始属于应用本身，如 `dsh --profile web --help` 显示的是 web 应用的帮助。
@@ -108,9 +108,9 @@ Harness Home 解析规则：`$DSH_HOME`，未设置则为 `~/.dsh`。典型的�
         └── cordis.patch.yml     ← Profile 级补丁层：用户设置与精调也写在这里
 ```
 
-> 版本提示：早期版本的用户设置写在 `$DSH_HOME/settings.yaml`，现**已废弃**——设置统一落在当前 profile 的 `cordis.patch.yml`。Settings 服务在启动时会把 harness home 里遗留的 `settings.yaml` **一次性导入**为同名条目，随后把原文件改名为 `settings.yaml.imported`。
+> 版本提示：早期版本的用户设置写在 `$DSH_HOME/settings.yaml`，现**已废弃**——设置统一落在当前 profile 的 `cordis.patch.yml`。Settings 服务在启动时会把 harness home 里遗留的 `settings.yaml` **先改名为 `settings.yaml.imported`，再**从改名后的文件逐 section 导入为同名条目（先改名保证「部分导入」绝不重放）。
 
-相关环境变量：`DSH_HOME`、`DSH_AGENTS_HOME`（默认 `~/.agents`）、`DSH_BUNDLED_SKILL_DIR`、`DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL`。
+相关环境变量：`DSH_HOME`、`DSH_AGENTS_HOME`（默认 `~/.agents`）、`DSH_BUNDLED_SKILL_DIR`、`DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL`。启动行为相关的还有：`DSH_PERMISSION_MODE`（默认 `workspace-write`；设为 `danger-full-access` 时审批策略同步放宽为 `never`）、`DSH_TOOLS_MODE`（`native` / `ptc` / `both`）、`DSH_TELEMETRY_MODE`（默认 `FEEDBACK_ONLY`）、`DSH_TELEMETRY_DISABLED`（取任何非空值即退出遥测）。这些变量也可以写在 `$DSH_HOME/.env`（或调用目录的 `.env`）里。
 
 ## 构建项目的 Harness
 
@@ -302,7 +302,7 @@ npm install --global memorix@1.3.0
 npx @deepseek-ai/dsh web --patch "$PWD/apps/cli/config/examples/mcp-memory/memorix.cordis.yml"
 ```
 
-源码仓库的 `apps/cli/config/examples/` 下有 cordis、github-review、mcp-memory、schedule 四组官方 overlay 示例，可参考改写。
+源码仓库的 `apps/cli/config/examples/` 下现有两组官方 overlay 示例：`github-review/`（评审事件驱动的工作区会话）与 `mcp-memory/`（三个记忆类 MCP 服务器参考：`memorix.cordis.yml`、`engram.cordis.yml`、`mcp-reference-memory.cordis.yml`）；早期版本里的通用 `cordis/` 与 `schedule/` 示例未随版本保留，按同目录示例的写法自建即可。
 
 #### 第 3 步：持久启用（写进补丁文件）
 
@@ -328,9 +328,9 @@ npx @deepseek-ai/dsh web --patch "$PWD/apps/cli/config/examples/mcp-memory/memor
 
 早期版本写在 `$DSH_HOME/settings.yaml` 的用户设置，现在**统一落在当前 profile 的 `$DSH_HOME/profiles/<name>/cordis.patch.yml`**，通过 Cordis 条目 config 覆盖生效；写入以 profile override 层承载，Home patch 与 `--patch` overlay 优先级更高，会被它们覆盖的表单写入会被拒绝。
 
-Settings 服务（`packages/settings/settings/src/index.ts`）在 Loader 就绪后会**一次性**把 harness home 里遗留的 `settings.yaml` 导入同名条目（`ui-developer-tools`→`ui-settings`、`ui-onboarding`→`ui-settings-general`、`shell`→当前平台 shell 执行器条目），随后把原文件改名为 `settings.yaml.imported`；当前组合不认识的 section 只留在改名后的文件里并记录日志。
+Settings 服务（`packages/settings/settings/src/index.ts`）在 Loader 就绪后会**先把 harness home 里遗留的 `settings.yaml` 改名为 `settings.yaml.imported`，再从改名后的文件逐 section 一次性导入同名条目**（`ui-developer-tools`→`ui-settings`、`ui-onboarding`→`ui-settings-general`、`shell`→当前平台的 `pwsh-sandbox` / `bash-sandbox`）；当前组合不认识的 section 只留在改名后的文件里并记录日志。
 
-Settings 表单只能编辑插件以 `.volatile()` 声明的字段，普通配置仍通过 Cordis 配置文件编辑。典型用途见 [4.6 模型精调](#s4-6)。
+Settings 表单只能编辑插件以 `.volatile()` 声明的字段，普通配置仍通过 Cordis 配置文件编辑。典型用途见 4.6 节的模型精调示例。
 
 #### 凭证
 
@@ -362,8 +362,8 @@ Settings 表单只能编辑插件以 `.volatile()` 声明的字段，普通配�
 
 #### 模型如何使用（对模型暴露的工具）
 
-- **委派工具**：模型用 `{ description, prompt }` 发起委派。请求可带可选字段：`label`（标签）、`outputSchema`（结构化输出约束）、`maxDepth`（嵌套深度上限）、`toolFilter`（工具过滤）、`persona`（人格设定）、`agentOptions`。
-- **控制工具**（`dsh-tool-subagent-control`）：`send_message`（向子代理发消息，经 `Agent.steer()` 进其收件箱）、`interrupt_agent`（打断）、`list_agents`（列出可续聊的子代理，状态机为 running / idle / ready）。
+- **委派工具**：模型侧参数只有必填的 `{ description, prompt }`，另有可选的 `provider` / `model` / `reasoning_effort`（开启子代理模型选择时暴露）与 `run_in_background`（默认后台）。`label` 由 `description` 自动生成；`outputSchema`、`maxDepth`、`toolFilter`、`persona`、`agentOptions` 属于**部署侧 Config 或服务请求层**，不是模型能传的参数。
+- **控制工具**（`dsh-tool-subagent-control`）：`send_message`（向子代理发消息，经 `Agent.steer()` 进其收件箱）、`interrupt_agent`（打断）、`list_agents`（列出你启动过的子代理及其 id / 标签 / 状态）。子代理的可用性状态只有两个值：`running`（正在干活）与 `inactive`（当前没有在跑，不代表任务已完成或失败）；`provisioning` / `failed` 描述的是**成员创建过程**，不要与可用性混用。
 
 #### 两种运行模式
 
@@ -422,7 +422,7 @@ args: { }                            # 可选，脚本内以 args 全局变量�
 
 ### 会话管理：续跑 / 分叉 / 回放
 
-- **Resume**：从持久化会话继续（如终端示例 `dsh --profile tui --resume <id>`）。
+- **Resume**：从持久化会话继续。终端里用 headless：`dsh --profile headless --session-id <id> "继续"`（未知 id 直接报错）；Web UI 则直接在会话列表打开原会话继续对话。注意仓库**没有内置 `tui` profile**，内置模板只有 web / headless / sdk / sdk-minimal / acp 五个。
 - **Fork**：从任意事件分叉出新会话（fork 的子代理继承父上下文即源于此）。
 - **Search / Replay**：会话查询服务支持有界读取、关系追踪、语义过滤与全文分页；回放按同一条事件流进行。
 - **压缩（Compaction）**：上下文过长时触发压缩事件与 CompactionEngine 摘要，长期任务不丢关键信息。
@@ -432,7 +432,8 @@ args: { }                            # 可选，脚本内以 args 全局变量�
 
 - **审批（Approval）**：每会话可设审批策略，敏感操作走一次性审批缝（`ApprovalRequest/Outcome`），全程留审计事件。
 - **权限预设（Permission Presets）**：预设档位 + 自定义态，切换记录进日志。
-- **沙箱（Sandbox）**：按策略做进程隔离与文件效果管控（file-effect 模式、受限 argv），**fail-closed**——策略缺失时拒绝而非放行。官方 AGENTS.md 的处理原则值得抄给项目：“被沙箱拦下的命令，以**最小粒度升级**重试”。
+- **沙箱（Sandbox）**：按策略做进程隔离与文件效果管控（file-effect 模式、受限 argv），**fail-closed**——策略缺失时拒绝而非放行。官方 AGENTS.md 的处理原则值得抄给项目：“被沙箱拦下的命令，以**最小粒度升级**重试”。Windows 上若未配置自定义 runner，sandbox-local 会自动注册一个内置技能 `diagnose-windows-sandbox-acl`，模型或用户可直接调用它排查「写入被拒」的真实成因。
+- **人机提问（`ask_user_question`）**：模型可以把问题抛回给用户、暂停本次工具调用。默认（`mode: 'legacy'`）阻塞等待回答；配置 `mode: 'timed'` 后前台等待 `timeout`（默认 120 秒）即自动继续，而问题仍保持可答——迟到的回答以 `user/message` 进入会话。`exit_plan_mode` 也走同一条 `ctx.userQuestions` 接缝。
 
 ### 自定义模型 Provider（多模型混用）
 
@@ -466,7 +467,7 @@ Web UI → **Settings → Models → Add provider**：内置目录含 `anthropic
 
 ### 定时任务、Webhook 与插件开发
 
-- **Schedule（定时/提醒）**：会话本地提醒与持久化转移，属可选 overlay。仓库 `apps/cli/config/examples/` 目前提供 `github-review/` 与 `mcp-memory/` 两组示例（含 `cordis.yml` 与 `.cordis.yml` 变体）；schedule 的示例未随版本保留，按同目录示例的写法自建 overlay 即可。
+- **Schedule（定时/提醒）**：会话本地提醒与持久化转移，现由官方**可选 bundle** `@deepseek-ai/dsh-experimental-schedule-bundle` 提供——在插件管理页把对应的可选能力打开即可，不再需要自写 overlay。同一批可选 bundle 还有 agent-team-profile、voice-input-bundle 与 auto-review。`apps/cli/config/examples/` 目前提供 `github-review/` 与 `mcp-memory/` 两组示例（含 `cordis.yml` 与 `.cordis.yml` 变体）。
 - **Webhook + GitHub Review**：经过鉴权的 provider 推送可编程地创建工作区会话，用于“GitHub 上收到评审事件 → 自动开会话处理”（可选 overlay）。
 - **插件开发**：能力缝（Capability Seam）要求同时实现三个角色——Service Definition / Provider / Consumer；模型可见的变更必须可从会话日志重建。仓库 `docs/cookbook/` 有 “adding-a-tool”“adding-an-llm-adapter”“extension-cookbook” 等上手菜谱；自研插件打 `dsh-plugin` 主题标签发布。
 - **Python SDK**：官方提供 Python 运行时（wheel 同样打包 `dsh` 命令）与 SDK 指南（`docs/user/guide/python-sdk.md`），`sdk` / `sdk-minimal` Profile 面向 SDK 客户端。
@@ -482,7 +483,7 @@ Web UI → **Settings → Models → Add provider**：内置目录含 `anthropic
 | `dsh --profile sdk` | SDK JSON-RPC 服务 |
 | `dsh --patch <overlay.yml>` | 叠加补丁层 |
 | `dsh --dump-config` | 查看合成配置 |
-| `dsh --dump-config-schema` | 导出配置 JSON Schema（v0.1.7-rc.2 起提供） |
+| `dsh --dump-config-schema` | 导出配置 JSON Schema（v0.1.7-alpha.1 起提供） |
 | `dsh plugin --profile …` | 管理 Profile 插件 |
 
 #### 环境变量速查
@@ -493,6 +494,10 @@ Web UI → **Settings → Models → Add provider**：内置目录含 `anthropic
 | `DEEPSEEK_API_KEY` | DeepSeek API 密钥 |
 | `DEEPSEEK_BASE_URL` | 自定义 API 端点 |
 | `DSH_BUNDLED_SKILL_DIR` | 内置技能目录覆盖 |
+| `DSH_PERMISSION_MODE` | 权限模式，默认 `workspace-write`；`danger-full-access` 会把审批策略放宽为 `never` |
+| `DSH_TOOLS_MODE` | 工具暴露形态：`native` / `ptc` / `both` |
+| `DSH_TELEMETRY_MODE` | 遥测模式，默认 `FEEDBACK_ONLY` |
+| `DSH_TELEMETRY_DISABLED` | 取任何非空值即退出遥测 |
 
 #### 文件位置速查
 
@@ -526,16 +531,16 @@ Web UI → **Settings → Models → Add provider**：内置目录含 `anthropic
 - 源码仓库：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（README / `SAFETY.md` / `AGENTS.md`）
 - 文档站：[Quickstart](https://deepseek-harness.github.io/deepseek-harness/en/guide/quickstart) · 仓库内 `docs/`（config-catalog、subsystems/\*、user/guide/\*）
 - 关键子系统文档：skills · subagent · agent-team · workflow · settings · mcp-memory · providers · system-prompt
-- 官方 MCP overlay 示例：`apps/cli/config/examples/`（cordis / github-review / mcp-memory / schedule）
+- 官方 MCP overlay 示例：`apps/cli/config/examples/`（`github-review` / `mcp-memory`）
 - 社区插件：[GitHub Topic: dsh-plugin](https://github.com/topics/dsh-plugin) · 社区资源合集 [awesome-deepseek-harness](https://github.com/Dominic789654/awesome-deepseek-harness/blob/main/README.zh-CN.md)
 - Cordis 框架：[cordiverse/cordis](https://github.com/cordiverse/cordis)
 
 ## 附录：5 分钟接入现有项目
 
 1. **启动**：在项目根目录执行 `npx @deepseek-ai/dsh web`，浏览器打开 `http://127.0.0.1:3080`，Settings → Models 填 DeepSeek API Key，选择本项目为工作区。
-2. **写 AGENTS.md**：把 [3.1](#s3-1) 模板填成你的项目实情，提交进仓库。
-3. **加一个技能**：创建 `.dsh/skills/code-review/SKILL.md`（照 [3.2](#s3-2) 模板），写清“何时触发 + 检查步骤”。
-4. **接一个 MCP**：把 [3.3](#s3-3) 的 overlay 改成你要的服务，先 `--patch` 试跑，稳定后合并进 `~/.dsh/profiles/myproj/cordis.patch.yml`。
+2. **写 AGENTS.md**：把 3.1 节的模板填成你的项目实情，提交进仓库。
+3. **加一个技能**：创建 `.dsh/skills/code-review/SKILL.md`（照 3.2 节的模板），写清“何时触发 + 检查步骤”。
+4. **接一个 MCP**：把 3.3 节的 overlay 改成你要的服务，先 `--patch` 试跑，稳定后合并进 `~/.dsh/profiles/myproj/cordis.patch.yml`。
 5. **试进阶**：对它说“用子代理并行梳理前端和后端，再汇总成报告”，观察 Subagent/Workflow 的编排与 Trajectory 日志。
 
 > [!DANGER] 🛑 安全提醒
