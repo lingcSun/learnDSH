@@ -2,10 +2,10 @@
 
 DeepSeek Harness（命令行工具名 `dsh`）是 DeepSeek 开源的全插件化 Agent Harness， 理念是 **“Everything is a Plugin”**：模型、工具、技能（Skills）、会话、沙箱、存储、规划、目标、子代理（Subagents）、工作流全部以插件形式提供，可在不改源码的前提下自由组合与替换。 本手册覆盖：① 如何为项目构建 Harness（AGENTS.md、Skills、MCP）；② 进阶用法（Subagents、Agent Teams、Workflows 等）。
 
-GitHub：deepseek-ai/deepseek-harness 适用版本：dsh v0.2.0-rc.2 对应源码：master@639ed0153（2026-09-29） MIT 开源 Developer Preview · 可能存在破坏性变更 手册整理日期：2026-09-05 · 事实复核日期：2026-09-29
+GitHub：deepseek-ai/deepseek-harness 适用版本：dsh v0.2.1-rc.2 对应源码：master@687f282e（2026-10-17） MIT 开源 Developer Preview · 可能存在破坏性变更 手册整理日期：2026-09-05 · 事实复核日期：2026-10-17
 
 > [!WARN] 📌 版本适配说明（dsh 迭代很快，请先核对版本）
-> 本手册内容对应 **dsh v0.2.0-rc.2**（源码 tag `dsh-v0.2.0-rc.2`，commit `639ed0153`，2026-09-29）；初稿基于 v0.1.3-alpha.1（commit `d347e70`，2026-09-04），2026-09-26 对照 v0.1.7-rc.2 源码完成一次事实复核，2026-09-29 升级到 v0.2.0-rc.2 复核。 项目更新频繁、可能存在破坏性变更：阅读前请先用 `dsh -V` 或 `npx @deepseek-ai/dsh --version` 核对本机版本； 若与本手册版本不一致，命令、配置与行为可能已有出入，请以 [官方仓库文档](https://github.com/deepseek-ai/deepseek-harness) 为准。
+> 本手册内容对应 **dsh v0.2.1-rc.2**（源码 tag `dsh-v0.2.1-rc.2`，commit `687f282e`，2026-10-17）；初稿基于 v0.1.3-alpha.1（commit `d347e70`，2026-09-04），2026-09-26 对照 v0.1.7-rc.2、2026-09-29 对照 v0.2.0-rc.2、2026-10-17 对照 v0.2.1-rc.2 各完成一次事实复核。 项目更新频繁、可能存在破坏性变更：阅读前请先用 `dsh -V` 或 `npx @deepseek-ai/dsh --version` 核对本机版本； 若与本手册版本不一致，命令、配置与行为可能已有出入，请以 [官方仓库文档](https://github.com/deepseek-ai/deepseek-harness) 为准。
 
 ## 认识 DeepSeek Harness
 
@@ -22,18 +22,18 @@ GitHub：deepseek-ai/deepseek-harness 适用版本：dsh v0.2.0-rc.2 对应源�
 | Preset id | 界面名称 | 说明 |
 | --- | --- | --- |
 | **standard**（标准模式） | Standard mode | 默认模式。处理代码、文件和资料，适合大多数任务；按需使用检索、编辑、终端等工具。含文件编辑、Shell（Windows 下为 PowerShell）、文件/网络搜索、Skills、Planning、Goals、Subagents、Workflows。 |
-| **ptc**（PTC 模式） | PTC mode | 包含标准模式的全部能力；工具经 **PTC（Programmatic Tool Calling）** 暴露，模型可把多步操作写进一段程序一次性编排执行，更适合批量调用工具并筛选/整理/去重/统计/汇总结果的场景。 |
-| **minimal**（极简模式） | Minimal mode | 极简编码代理，只保留一个**持久终端工具**（Windows 下为 PowerShell 持久化终端，其余平台为 bash），用于最小环境下的基准评测与能力对比。注意：**该模式不挂载 `agent-instructions` 插件，AGENTS.md 不注入**。 |
+| **ptc**（PTC 模式） | PTC mode | 标准模式能力的 **PTC（Programmatic Tool Calling）形态**：工具经 PTC 暴露，模型可把多步操作写进一段程序一次性编排执行，更适合批量调用工具并筛选/整理/去重/统计/汇总结果的场景（另有 standard 没有的工具呈现插件；工作流编排默认关闭，需要时再启用）。 |
+| **minimal**（极简模式） | Minimal mode | 极简编码代理，核心是一个**持久终端工具**（Windows 下为 PowerShell 持久化终端，其余平台为 bash），用于最小环境下的基准评测与能力对比；v0.2.1 起另挂载**只读的图像输入**（可读图、不可读写文件）与**上下文压缩**（自动 + 手动命令）。注意：**该模式不挂载 `agent-instructions` 插件，AGENTS.md 不注入**。 |
 | **cordis**（创造模式） | Creator mode | 用对话定制 DSH：编写插件以添加功能或界面，或组合工具与提示词创建自己的模式；含运行时检视与预设编写引导。 |
 
-这四个 preset 均以 `@deepseek-ai/dsh-agent-preset` 插件行的形式注入，按 `order` 排序由 `packages/preset/agent-preset-registry` 展示；Web UI 的 Agent presets 设置页可切换「设为新任务默认」。
+这四个 preset 均以 `@deepseek-ai/dsh-agent-preset` 插件行的形式注入，按 `order` 排序由 `packages/preset/agent-preset-registry` 展示；v0.2.1 起四个 preset 都挂载了 `time-context`（时间上下文）与 `tool-schedule`（定时任务工具）。Web UI 的 Agent presets 设置页可切换「设为新任务默认」。
 
 ### 全程可追溯的会话日志
 
 模型看到的一切都被记录在一条**只追加（append-only）的会话日志**里：系统提示词、推理、工具调用与结果、子代理调度、上下文注入等。Web UI 中的 Trajectory 视图可以按来源检查每条记录；**续跑（Resume）、分叉（Fork）、搜索、回放（Replay）都作用于同一条事件流**。这既是调试利器，也意味着“模型可见 ⟺ 已落日志”。
 
 > [!WARN] ⚠️ 开发者预览阶段
-> 项目处于 Developer Preview，官方明确说明**会有破坏性兼容变更**；运行前请阅读仓库中的 `SAFETY.md` 安全须知。本手册基于官方 master 分支 **v0.2.0-rc.2**（commit `639ed0153`，2026-09-29）的文档整理，个别细节请以官方文档为准。
+> 项目处于 Developer Preview，官方明确说明**会有破坏性兼容变更**；运行前请阅读仓库中的 `SAFETY.md` 安全须知。本手册基于官方 master 分支 **v0.2.1-rc.2**（commit `687f282e`，2026-10-17）的文档整理，个别细节请以官方文档为准。
 
 ## 安装与快速上手
 
@@ -50,7 +50,12 @@ npx @deepseek-ai/dsh web --no-open
 
 # 指定端口（--port 属于 web 应用自身）
 dsh --profile web --port 8080
+
+# 远程/反代场景：绑定具体地址、原生 HTTPS、声明对外 URL 与额外信任主机
+dsh --profile web --host 192.168.1.10 --tls-cert cert.pem --tls-key key.pem --public-url https://dsh.example.com --trusted-host dsh.example.com
 ```
+
+> v0.2.1 起 Web 支持原生 HTTPS 监听（`--tls-cert` + `--tls-key`）与具体绑定地址（`--host` 仅接受本机接口的具体 IPv4/IPv6 字面量，拒绝通配地址）；`--public-url` 用于反代场景声明对外根地址，`--trusted-host` 向 `/api` 浏览器信任围栏追加额外主机名。
 
 **方式二：源码运行**
 
@@ -71,7 +76,7 @@ pnpm dsh web
 3. **跑第一个任务：**例如输入“总结这个仓库，指出主要包的职责”，观察代理读文件、执行命令、委派子代理与维护计划的全过程。
 
 > [!TIP] 💡 环境变量方式
-> 也可以直接设置 `DEEPSEEK_API_KEY` 与 `DEEPSEEK_BASE_URL`；自定义 Provider 通常用 `apiKeyEnv` 引用环境变量而非内联密钥。见 4.6 节「自定义模型 Provider」。
+> 也可以直接设置 `DEEPSEEK_API_KEY` 与 `DEEPSEEK_BASE_URL`；自定义 Provider 通常用 `apiKeyEnv` 引用环境变量而非内联密钥。见 4.6 节「自定义模型 Provider」。注意 v0.2.1 起**凭证优先级反转**：`$DSH_HOME/.credentials.yaml` 里已保存的凭证**优先于**环境变量 / `.env` 里的同名 key（headless 也不例外）——想让环境变量生效，先清掉设置页保存的凭证。
 
 ### CLI 与运行 Profiles
 
@@ -97,7 +102,7 @@ Harness Home 解析规则：`$DSH_HOME`，未设置则为 `~/.dsh`。典型的�
 
 ```
 ~/.dsh/                          ← Harness Home（$DSH_HOME）
-├── AGENTS.md                    ← 用户级全局指令（对所有项目生效）
+├── AGENTS.md                    ← 用户级全局指令（另一根在 $DSH_AGENTS_HOME，默认 ~/.agents/AGENTS.md）
 ├── .credentials.yaml            ← 凭证文档（API Key 实际存放处，勿提交）
 ├── cordis.patch.yml             ← 机器级补丁层（如常驻 MCP 服务器）
 ├── skills/                      ← 用户级技能目录
@@ -110,7 +115,10 @@ Harness Home 解析规则：`$DSH_HOME`，未设置则为 `~/.dsh`。典型的�
 
 > 版本提示：早期版本的用户设置写在 `$DSH_HOME/settings.yaml`，现**已废弃**——设置统一落在当前 profile 的 `cordis.patch.yml`。Settings 服务在启动时会把 harness home 里遗留的 `settings.yaml` **先改名为 `settings.yaml.imported`，再**从改名后的文件逐 section 导入为同名条目（先改名保证「部分导入」绝不重放）。
 
-相关环境变量：`DSH_HOME`、`DSH_AGENTS_HOME`（默认 `~/.agents`）、`DSH_BUNDLED_SKILL_DIR`、`DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL`。启动行为相关的还有：`DSH_PERMISSION_MODE`（默认 `workspace-write`；设为 `danger-full-access` 时审批策略同步放宽为 `never`）、`DSH_TOOLS_MODE`（`native` / `ptc` / `both`）、`DSH_TELEMETRY_MODE`（默认 `FEEDBACK_ONLY`）、`DSH_TELEMETRY_DISABLED`（取任何非空值即退出遥测）。这些变量也可以写在 `$DSH_HOME/.env`（或调用目录的 `.env`）里。
+相关环境变量：`DSH_HOME`、`DSH_AGENTS_HOME`（默认 `~/.agents`）、`DSH_BUNDLED_SKILL_DIR`、`DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL`。启动行为相关的还有：`DSH_PERMISSION_MODE`（默认 `workspace-write`；设为 `danger-full-access` 时审批策略同步放宽为 `never`）、`DSH_TELEMETRY_MODE`（默认 `FEEDBACK_ONLY`）、`DSH_TELEMETRY_DISABLED`（取任何非空值即退出遥测）。旧版的 `DSH_TOOLS_MODE` 已在 v0.2.1 退役（工具呈现改为配置/插件级声明，只剩 `native` / `ptc` 两档）。
+
+> [!WARN] ⚠️ `.env` 不是什么都能写的
+> 环境变量分三层合成：**进程环境 > 调用目录 `.env` > `$DSH_HOME/.env`**。但有一份「启动专属名单」（`PATH`、`HOME`、`NODE_OPTIONS`、`NODE_TLS_REJECT_UNAUTHORIZED`、`DEEPSEEK_BASE_URL` 等及 `DSH_*`、`XDG_*`、`DYLD_*`、`BASH_FUNC_*` 前缀）**只能来自最外层启动环境**——v0.2.1 起，`.env` 里出现名单命中项会**直接抛错拒绝启动**（不再静默忽略）；唯一例外是代理类变量（`HTTP(S)_PROXY` / `ALL_PROXY` / `NO_PROXY`）允许写在 `$DSH_HOME/.env`。普通业务变量（如自定义 Provider 的 `apiKeyEnv` 引用的 key）仍可写进两层 `.env`。
 
 ## 构建项目的 Harness
 
@@ -128,7 +136,7 @@ Harness Home 解析规则：`$DSH_HOME`，未设置则为 `~/.dsh`。典型的�
 
 `AGENTS.md` 由 `@deepseek-ai/dsh-agent-instructions` 插件（`packages/context/agent-instructions/`）加载，作为 `instructions` 形态上下文注入请求。当前加载模型是**用户全局 + 项目根到会话 cwd 的整条目录链 + 每目录多候选 + local 叠加**：
 
-1. **用户全局**：固定的 `$DSH_HOME/AGENTS.md`，对所有项目生效。
+1. **用户全局**：两个根——`$DSH_HOME/AGENTS.md` 与 **`$DSH_AGENTS_HOME`（默认 `~/.agents`）下的 `AGENTS.md`**（v0.2.1 新增第二根，与 Claude Code 等 `.agents/` 约定互通；两根内容去重后合并），对所有项目生效。
 2. **项目根**：从会话 cwd 逐级向上，命中任一 `projectRootMarkers`（默认只有 `.git`）的目录即项目根；找不到时退回 cwd。标记本身可通过 `projectRootMarkers` 扩展。
 3. **目录链**：遍历**从项目根到 cwd 的每一个目录**（不只根那一层），每目录按顺序加载全部存在的候选文件：`AGENTS.md`、`CLAUDE.md`，再加载叠加层 `AGENTS.local.md`、`CLAUDE.local.md`。
    ⇒ 子目录里的 `AGENTS.md` 也会随深度叠加生效；`CLAUDE.md` 是**被同等识别的候选名**（不只是软链兼容），`.local.md` 用来放本机私有补充。
@@ -302,7 +310,7 @@ npm install --global memorix@1.3.0
 npx @deepseek-ai/dsh web --patch "$PWD/apps/cli/config/examples/mcp-memory/memorix.cordis.yml"
 ```
 
-源码仓库的 `apps/cli/config/examples/` 下现有两组官方 overlay 示例：`github-review/`（评审事件驱动的工作区会话）与 `mcp-memory/`（三个记忆类 MCP 服务器参考：`memorix.cordis.yml`、`engram.cordis.yml`、`mcp-reference-memory.cordis.yml`）；早期版本里的通用 `cordis/` 与 `schedule/` 示例未随版本保留，按同目录示例的写法自建即可。
+源码仓库的 `apps/cli/config/examples/` 下现有**一组**官方 overlay 示例：`mcp-memory/`（三个记忆类 MCP 服务器参考：`memorix.cordis.yml`、`engram.cordis.yml`、`mcp-reference-memory.cordis.yml`；v0.2.1 删除了此前的 `github-review/` 示例）。定时任务也不再需要示例——Schedule 已内置（见 4.7），早期版本里的通用 `cordis/` 与 `schedule/` 示例同样未随版本保留，按同目录示例的写法自建即可。
 
 #### 第 3 步：持久启用（写进补丁文件）
 
@@ -362,7 +370,7 @@ Settings 表单只能编辑插件以 `.volatile()` 声明的字段，普通配�
 
 #### 模型如何使用（对模型暴露的工具）
 
-- **委派工具**：模型侧参数只有必填的 `{ description, prompt }`，另有可选的 `provider` / `model` / `reasoning_effort`（开启子代理模型选择时暴露）与 `run_in_background`（默认后台）。`label` 由 `description` 自动生成；`outputSchema`、`maxDepth`、`toolFilter`、`persona`、`agentOptions` 属于**部署侧 Config 或服务请求层**，不是模型能传的参数。
+- **委派工具**：模型侧参数只有必填的 `{ description, prompt }`，另有可选的 `provider` / `model` / `reasoning_effort`（开启子代理模型选择时暴露）与 `run_in_background`（默认后台）。`label` 由 `description` 自动生成；`outputSchema`、`maxDepth`、`toolFilter`、`persona`、`agentOptions` 属于**部署侧 Config 或服务请求层**，不是模型能传的参数。v0.2.1 起部署侧还可为委派的子代理**指定 / 恢复 Agent preset**（`packages/subagent/tool-subagent/src/preset-selection.ts`）——子代理不必继承父会话的模式。
 - **控制工具**（`dsh-tool-subagent-control`）：`send_message`（向子代理发消息，经 `Agent.steer()` 进其收件箱）、`interrupt_agent`（打断）、`list_agents`（列出你启动过的子代理及其 id / 标签 / 状态）。子代理的可用性状态只有两个值：`running`（正在干活）与 `inactive`（当前没有在跑，不代表任务已完成或失败）；`provisioning` / `failed` 描述的是**成员创建过程**，不要与可用性混用。
 
 #### 两种运行模式
@@ -463,12 +471,14 @@ Web UI → **Settings → Models → Add provider**：内置目录含 `anthropic
 
 > ⚠️ Cordis 配置覆盖会**整体替换该条目的 config**，编辑已有覆盖时务必保留其他 provider 与字段。
 
-其他可用项：每模型的 `reasoningEfforts` 映射、思维默认开启的模型配 `compat.thinkingFormat: deepseek`、兼容开关（如 `supportsDeveloperRole`、`maxTokensField`）、`defaultInput`。改动后下一次请求即生效。
+其他可用项：每模型的 `reasoningEfforts` 映射（v0.2.1 起**自定义 API 模型也能在 UI 里直接编辑推理档位**）、思维默认开启的模型配 `compat.thinkingFormat: deepseek`、兼容开关（如 `supportsDeveloperRole`、`maxTokensField`）、`defaultInput`。改动后下一次请求即生效。另注意：**DeepSeek 账号登录的模型目录改由账号端提供**（账号路由不再接受本地 `models` 目录配置，遗留该字段会导致插件加载报错 `models is no longer configurable`）；DeepSeek 官方模型显示名现为 `DeepSeek-V4.1-Flash` / `DeepSeek-V4-Pro`。
 
 ### 定时任务、Webhook 与插件开发
 
-- **Schedule（定时/提醒）**：会话本地提醒与持久化转移，现由官方**可选 bundle** `@deepseek-ai/dsh-experimental-schedule-bundle` 提供——在插件管理页把对应的可选能力打开即可，不再需要自写 overlay。同一批可选 bundle 还有 agent-team-profile、voice-input-bundle 与 auto-review。`apps/cli/config/examples/` 目前提供 `github-review/` 与 `mcp-memory/` 两组示例（含 `cordis.yml` 与 `.cordis.yml` 变体）。
-- **Webhook + GitHub Review**：经过鉴权的 provider 推送可编程地创建工作区会话，用于“GitHub 上收到评审事件 → 自动开会话处理”（可选 overlay）。
+- **Schedule（定时/提醒）**：会话本地提醒与持久化转移。**v0.2.1 起已内置**——Web 组合自带 Schedule 服务与任务页，standard / ptc / cordis 三个 preset 直接挂载 `tool-schedule` 工具；旧的 `@deepseek-ai/dsh-experimental-schedule-bundle` 已废弃（进 `RETIRED_BUNDLES`，加载 profile 时自动从 bundle 清单剔除，无需手工清理）。
+- **其余可选 bundle**（在插件管理页按需打开；v0.2.1 起共 12 项，官方 bundle 支持在页内直接安装并显示来源仓库）：session-search（会话搜索）、ralph-bundle、terminal-bundle、badge-skill-bundle、session-titles-bundle、agent-team-profile（Agent Teams）、voice-input-bundle（语音输入）、cot-translation-bundle（思维链翻译）、auto-review、inspector-profile（内嵌 DevTools 检视）、plugin-market-bundle（自定义插件市场 + Discover 标签页）、tool-worktree（Git worktree 实验）。`apps/cli/config/examples/` 现仅存 `mcp-memory/` 一组示例。
+- **Webhook**：经过鉴权的 provider 推送可编程地创建工作区会话（`packages/webhook` / `packages/experimental/webhook-github`），用于“GitHub 上收到评审事件 → 自动开会话处理”；v0.2.1 起 github-review overlay 示例已从 `apps/cli/config/examples/` 移除，按包内 README 自建。
+- **DeepSeek 官方搜索/抓取 API（v0.2.1 新增）**：Web UI 设置新增「Use the new Web Search API」开关（默认关）。开启后网页搜索/抓取改走 DeepSeek 官方 Search / Fetch API（`packages/web/web-deepseek-api` + `web-search-deepseek`）：一次直接请求、不占用辅助模型轮次，Fetch 返回页面 Markdown；搜索端点可用 `DEEPSEEK_SEARCH_BASE_URL` 覆盖。
 - **插件开发**：能力缝（Capability Seam）要求同时实现三个角色——Service Definition / Provider / Consumer；模型可见的变更必须可从会话日志重建。仓库 `docs/cookbook/` 有 “adding-a-tool”“adding-an-llm-adapter”“extension-cookbook” 等上手菜谱；自研插件打 `dsh-plugin` 主题标签发布。
 - **Python SDK**：官方提供 Python 运行时（wheel 同样打包 `dsh` 命令）与 SDK 指南（`docs/user/guide/python-sdk.md`），`sdk` / `sdk-minimal` Profile 面向 SDK 客户端。
 
@@ -495,7 +505,6 @@ Web UI → **Settings → Models → Add provider**：内置目录含 `anthropic
 | `DEEPSEEK_BASE_URL` | 自定义 API 端点 |
 | `DSH_BUNDLED_SKILL_DIR` | 内置技能目录覆盖 |
 | `DSH_PERMISSION_MODE` | 权限模式，默认 `workspace-write`；`danger-full-access` 会把审批策略放宽为 `never` |
-| `DSH_TOOLS_MODE` | 工具暴露形态：`native` / `ptc` / `both` |
 | `DSH_TELEMETRY_MODE` | 遥测模式，默认 `FEEDBACK_ONLY` |
 | `DSH_TELEMETRY_DISABLED` | 取任何非空值即退出遥测 |
 
@@ -503,7 +512,7 @@ Web UI → **Settings → Models → Add provider**：内置目录含 `anthropic
 
 | 路径 | 内容 |
 | --- | --- |
-| `~/.dsh/AGENTS.md` | 用户级全局指令 |
+| `~/.dsh/AGENTS.md` · `~/.agents/AGENTS.md` | 用户级全局指令（两个根，内容去重合并） |
 | `<项目根>/AGENTS.md` | 项目级指令（自动发现） |
 | `<项目根>/.dsh/skills/<name>/SKILL.md` | 项目技能（最高优先级） |
 | `~/.dsh/skills/` · `~/.agents/skills/` | 用户级技能 |
@@ -531,7 +540,7 @@ Web UI → **Settings → Models → Add provider**：内置目录含 `anthropic
 - 源码仓库：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（README / `SAFETY.md` / `AGENTS.md`）
 - 文档站：[Quickstart](https://deepseek-harness.github.io/deepseek-harness/en/guide/quickstart) · 仓库内 `docs/`（config-catalog、subsystems/\*、user/guide/\*）
 - 关键子系统文档：skills · subagent · agent-team · workflow · settings · mcp-memory · providers · system-prompt
-- 官方 MCP overlay 示例：`apps/cli/config/examples/`（`github-review` / `mcp-memory`）
+- 官方 MCP overlay 示例：`apps/cli/config/examples/`（`mcp-memory`；v0.2.1 起仅此一组）
 - 社区插件：[GitHub Topic: dsh-plugin](https://github.com/topics/dsh-plugin) · 社区资源合集 [awesome-deepseek-harness](https://github.com/Dominic789654/awesome-deepseek-harness/blob/main/README.zh-CN.md)
 - Cordis 框架：[cordiverse/cordis](https://github.com/cordiverse/cordis)
 

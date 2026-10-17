@@ -286,15 +286,16 @@ cd deepseek-harness
 <li><strong>编辑器</strong>：推荐 VS Code（装 TypeScript 插件），读源码体验好很多。</li>
 </ol>
 <div class="alert alert-warn"><span class="alert-title">⚠️ 版本与依据声明（请先读这一条）</span><p>DeepSeek Harness 迭代很快，网上介绍文章随时可能过时。本教材的立场很简单：<strong>网页内容（官网、博客、媒体）只当线索；每一条结论都回到源码里验证；两者冲突时，一律以源码为准。</strong>全书正文引用的每个机制都附仓库内路径与行号，欢迎逐条对质。</p>
-<p><strong>本教材的精确源码指纹</strong>：仓库 <code>deepseek-ai/deepseek-harness</code>，版本 <strong>v0.2.0-rc.2</strong>，commit <code>639ed0153</code>（2026-09-29）。教材初稿基于 v0.1.3-alpha.1（commit <code>d347e70</code>，2026-09-04）编写，2026-09-26 对照 v0.1.7-rc.2 完成一次全量引用复核，2026-09-29 对照 v0.2.0-rc.2 完成增量复核（逐章核对受本次升级影响的论断、版本标记与引用位置）。核对你手上的版本：<code>git log -1</code>，或看根目录 <code>package.json</code> 的 <code>version</code> 字段。</p>
+<p><strong>本教材的精确源码指纹</strong>：仓库 <code>deepseek-ai/deepseek-harness</code>，版本 <strong>v0.2.1-rc.2</strong>，commit <code>687f282e</code>（2026-10-17）。教材初稿基于 v0.1.3-alpha.1（commit <code>d347e70</code>，2026-09-04）编写，2026-09-26 对照 v0.1.7-rc.2 完成一次全量引用复核，2026-09-29 对照 v0.2.0-rc.2、2026-10-17 对照 v0.2.1-rc.2 各完成一次增量复核（逐章核对受本次升级影响的论断、版本标记与引用位置）。核对你手上的版本：<code>git log -1</code>，或看根目录 <code>package.json</code> 的 <code>version</code> 字段。</p>
 <p><strong>「网页 vs 源码」的真实案例</strong>：官网介绍页宣传 standard / code / minimal / creator 四种运行模式——<strong>其中「code」与「creator」这两个词在代码里并不存在</strong>。代码里真实存在的是 Web 应用 bundle 自带的四个 <strong>agent preset</strong>（id 为 <code>standard</code> / <code>ptc</code> / <code>minimal</code> / <code>cordis</code>，定义在 <code>packages/bundle/web-app/presets/*.patch.yml</code>，界面名 Standard mode / PTC mode / Minimal mode / Creator mode），叠加在 profile 体系（web / headless / sdk / sdk-minimal / acp，第 1 章）与 plan 模式、沙箱档位、审批策略等运行时机制（进阶 2）之上。如果教材照网页写，你翻遍代码也找不到「code 模式」这条声明。</p>
 <p><strong>版本漂移了怎么办（三招）</strong>：① 行号对不上——每个代码块都给了<strong>符号名</strong>（函数/类/常量/配置键），编辑器按名搜索永远比行号可靠；② 怀疑结构变了——用 <code>dsh --dump-config</code> 打印你本机真实插件树，对照 <code>docs/architecture.md</code>；③ 教材提到的标识符在你的版本里搜不到——先怀疑版本差异，在仓库里搜该符号的改名/迁移历史，再决定内容是否仍然成立。</p>
 <p><strong>从 v0.1.3-alpha.1 到 v0.1.7-rc.2 的四处结构性变化（复核时已就地更正）</strong>：① CLI 入口从 <code>apps/cli/bin/dsh.js</code> 移到 <strong><code>apps/cli/src/bin.ts</code></strong>（参数解析拆到同级 <code>args.ts</code>）；② <code>packages/</code> 现在是<strong>分类目录</strong>，包被归入 <code>core/</code>、<code>llm/</code>、<code>sandbox/</code>、<code>session/</code>、<code>compaction/</code> 等子目录——旧路径按包名搜索即可；③ LLM 层的 <code>streamWithConnection()</code> <strong>已不存在</strong>，拆成适配器的 <code>generate()</code> + <code>request()</code> 两步，DeepSeek 适配器的 <code>serializeRequest</code> 已简化为 <strong><code>serialize</code></strong>，且 <code>llm-deepseek</code> 包已按职责拆成 20 余个文件；④ <strong>DeepSeek 适配器改走 Anthropic 兼容端点</strong>——旧教材说它对接「DeepSeek（OpenAI 兼容）接口」，现 <code>llm-deepseek</code> 实为 fetch + SSE 对接 <code>api.deepseek.com/anthropic</code> 的 <strong>Messages 协议</strong>（<code>serialize()</code> 产 Messages 线格式、<code>translate()</code> 译 Messages SSE 事件，见 4.1/4.3）；第 0 章裸 agent 教学例仍用 chat/completions，属刻意保留的教学简化。</p>
-<p><strong>从 v0.1.7-rc.2 到 v0.2.0-rc.2 的六处变化（本轮复核时已就地更正）</strong>：① <strong>失败也守约</strong>——某一步抛错时，循环会先用 <code>ToolCallRecovery</code> 为「已记录 <code>tool/call</code> 却没有结果」的调用补一条保守结果再重抛（补记失败抛 <code>AggregateError</code>），<code>tool-calls.ts</code> 自身不再伪造结果（见 3.3/3.5）；② <strong>人机提问成为接缝</strong>——<code>ask_user_question</code> 新增 <code>mode: 'legacy' | 'timed'</code> 与 <code>timeout</code>（默认仍是阻塞式 legacy；timed 在前台默认等 120 秒、问题保持可后答），<code>exit_plan_mode</code> 也改走 <code>ctx.userQuestions</code>；③ <strong>Windows 沙箱自带诊断技能</strong>——未配置自定义 runner 时自动注册 <code>diagnose-windows-sandbox-acl</code>（见进阶 2）；同时 <code>packages/ssh/*</code> 是「把执行世界搬到远端」的正式接缝（早期文档提到的 <code>packages/e2b</code> POC 已不在仓库里）；④ <strong>CLI 只做翻译、不读环境</strong>——<code>runCli(options)</code> 接收安装方注入的 <code>packageManager</code> / <code>manageDesktopProfile</code>，<code>dsh plugin</code> 另有 <code>allow-version</code> / <code>revoke-version</code> / <code>version-exemptions</code> 三个自有子命令（见 9.1）；⑤ <strong>可选能力改为官方 bundle</strong>——<code>OPTIONAL_BUNDLES</code> 含 agent-team-profile、voice-input-bundle、auto-review、schedule-bundle（定时任务从 examples 示例改为插件管理页里开启的可选 bundle），telemetry/otel 与 product-analytics 等也进入装配；⑥ <strong>仓库自带文档全面重写</strong>（双语配对、文档预算门、<code>architecture.md</code> 重构）——本教材引用的行号一律以本版源码为准，<strong>符号名才是稳定锚点</strong>。</p>
+<p><strong>从 v0.1.7-rc.2 到 v0.2.0-rc.2 的六处变化（复核时已就地更正）</strong>：① <strong>失败也守约</strong>——某一步抛错时，循环会先用 <code>ToolCallRecovery</code> 为「已记录 <code>tool/call</code> 却没有结果」的调用补一条保守结果再重抛（补记失败抛 <code>AggregateError</code>），<code>tool-calls.ts</code> 自身不再伪造结果（见 3.3/3.5）；② <strong>人机提问成为接缝</strong>——<code>ask_user_question</code> 新增 <code>mode: 'legacy' | 'timed'</code> 与 <code>timeout</code>（默认仍是阻塞式 legacy；timed 在前台默认等 120 秒、问题保持可后答），<code>exit_plan_mode</code> 也改走 <code>ctx.userQuestions</code>；③ <strong>Windows 沙箱自带诊断技能</strong>——未配置自定义 runner 时自动注册 <code>diagnose-windows-sandbox-acl</code>（见进阶 2）；同时 <code>packages/ssh/*</code> 是「把执行世界搬到远端」的正式接缝（早期文档提到的 <code>packages/e2b</code> POC 已不在仓库里）；④ <strong>CLI 只做翻译、不读环境</strong>——<code>runCli(options)</code> 接收安装方注入的 <code>packageManager</code> / <code>manageDesktopProfile</code>，<code>dsh plugin</code> 另有 <code>allow-version</code> / <code>revoke-version</code> / <code>version-exemptions</code> 三个自有子命令（见 9.1）；⑤ <strong>可选能力改为官方 bundle</strong>——<code>OPTIONAL_BUNDLES</code> 含 agent-team-profile、voice-input-bundle、auto-review、schedule-bundle（定时任务从 examples 示例改为插件管理页里开启的可选 bundle），telemetry/otel 与 product-analytics 等也进入装配；⑥ <strong>仓库自带文档全面重写</strong>（双语配对、文档预算门、<code>architecture.md</code> 重构）——本教材引用的行号一律以本版源码为准，<strong>符号名才是稳定锚点</strong>。</p>
+<p><strong>从 v0.2.0-rc.2 到 v0.2.1-rc.2 的七处变化（本轮复核时已就地更正）</strong>：① <strong>工具呈现模式只剩两档</strong>——<code>ToolPresentationMode</code> 的 <code>'both'</code> 值被删除，现为 <code>'native' | 'ptc'</code>（环境变量 <code>DSH_TOOLS_MODE</code> 一并退役），PTC 指令组装也重构为直接把执行场景传给 run_code 工厂（对外文本不变，见高 2）；② <strong>凭证优先级反转</strong>——托管凭证文件 <code>$DSH_HOME/.credentials.yaml</code> 现在<strong>优先于</strong>环境变量/.env 里的 key（headless 也一样）；同时启动层对 <code>.env</code> 里出现的 <code>DSH_*</code> 等保留名从「忽略」改为<strong>直接抛错</strong>（见进阶 1）；③ <strong>定时任务内置</strong>——Schedule 服务与任务页进入 Web 组合、各 preset 直接挂 <code>tool-schedule</code>，<code>schedule-bundle</code> 进 <code>RETIRED_BUNDLES</code>（旧 profile 里会被自动剔除）；④ <strong>防御性文档拆分</strong>——单文件 <code>docs/defensive-patterns.md</code> 拆成 <code>docs/defensive-patterns/</code> 目录（general / client-components / conversation-and-session / package-surface / remote-and-api 五类 46 条，仅 general 就 15 条），「七式」的说法随之升级为「分类导航」（见进阶 5）；⑤ <strong>会话 append 更严</strong>——<code>validateNext</code> 移入 <code>commit()</code>、新增发布期重入卫兵，<code>surface.replaceGeneration</code> 更名 <code>contentGeneration</code>（见 6.2/6.3）；⑥ <strong>投影契约从四件套变六件套</strong>——<code>stateVersion</code> 成为必填、新增可选 <code>wire</code> 视图（见 6.4），<code>turnBoundary</code> 投影现注册在 agent-loop 包；⑦ <strong>行号整体平移</strong>——本版 agent-loop（step 请求准入刷新上下文）、session、app-boot（保留名单扩大且命中即抛错）、ptc-runtime（新增可覆盖成员）等处行号普遍后移，<code>adapter.ts</code> 增至 178 行、<code>ptc-runtime</code> 增至 165 行，教程引用已逐一对照更新。</p>
 </div>
 <h3>阅读约定</h3>
 <ul>
-<li>代码块上方的灰色小条是<strong>源码出处</strong>（仓库内相对路径 + 行号范围），行号基于 <strong>v0.2.0-rc.2</strong>，与你克隆到的版本可能有几行偏移，按符号名搜索即可。</li>
+<li>代码块上方的灰色小条是<strong>源码出处</strong>（仓库内相对路径 + 行号范围），行号基于 <strong>v0.2.1-rc.2</strong>，与你克隆到的版本可能有几行偏移，按符号名搜索即可。</li>
 <li>代码里被删减的部分用 <code>/* … 省略 … */</code> 或 <code># … 省略 …</code> 标出，省略不影响语义。</li>
 <li>四种彩色卡片：📘 概念 💡 提示 ⚠️ 注意 🛠 实操。</li>
 <li>自测题的答案折叠在题目下方（点击展开），先自己想再看。</li>
@@ -672,7 +673,7 @@ mvn compile exec:java -Dexec.args=&quot;读一下 pom.xml 告诉我项目叫什�
 </tbody>
 </table>
 <p>带着这张表去看下面的原文，你会发现清单突然变得可读了：<strong>每一行 = 「装一个零件」</strong>，id 是它的工位号，name 是零件的包名，config 是拧螺丝的参数。看不懂的行直接跳过，不欠债。</p>
-<p>packages/bundle/sdk-minimal/cordis.patch.yml（节选，v0.2.0-rc.2 共 158 行）</p>
+<p>packages/bundle/sdk-minimal/cordis.patch.yml（节选，v0.2.1-rc.2 共 172 行）</p>
 <pre><code>- insert:                                  # 这份清单是「插入」一棵完整插件树
     - id: llm-deepseek                      # ① 模型适配器：接 DeepSeek API
       name: '@deepseek-ai/dsh-llm-deepseek'
@@ -724,7 +725,7 @@ mvn compile exec:java -Dexec.args=&quot;读一下 pom.xml 告诉我项目叫什�
 </div>
 <h3>1.5 实操：装起来，跑起来，看插件树</h3>
 <div class="alert alert-practice"><span class="alert-title">🛠 实操 1-A：从源码构建并启动（约 10–20 分钟，视网络）</span><p><code>cd &lt;repo&gt; pnpm install # 安装依赖（monorepo，包很多，耐心） pnpm build # 构建（官方标准入口） # 方式一：无界面单任务（最容易观察输入输出） pnpm dsh --profile headless "用一句话介绍你自己" # 方式二：Web 图形界面 pnpm dsh web # dsh web 是 --profile web 的别名 # 按终端提示的地址（默认 http://127.0.0.1:3080）在浏览器打开</code></p>
-<p>入口位置说明（v0.2.0-rc.2）：CLI 源码入口已移到 <strong><code>apps/cli/src/bin.ts</code></strong>（参数解析在同目录 <code>args.ts</code>，profile 启动在 <code>profile-boot.ts</code>）；包的 <code>bin</code> 字段指向构建产物 <code>lib/bin.js</code>。<strong>旧版教材里的 <code>apps/cli/bin/dsh.js</code> 已不存在</strong>，因此实操统一用 <code>pnpm dsh</code>（它会走构建产物），比手写 node 路径稳。</p>
+<p>入口位置说明（v0.2.1-rc.2）：CLI 源码入口在 <strong><code>apps/cli/src/bin.ts</code></strong>（参数解析在同目录 <code>args.ts</code>，profile 启动在 <code>profile-boot.ts</code>）；包的 <code>bin</code> 字段指向构建产物 <code>lib/bin.js</code>。<strong>旧版教材里的 <code>apps/cli/bin/dsh.js</code> 已不存在</strong>，因此实操统一用 <code>pnpm dsh</code>（它会走构建产物），比手写 node 路径稳。</p>
 <p>Web 界面里新建会话随便聊两句，重点看两处：<strong>① Trajectory（轨迹）视图</strong>——你能看到模型每一步的推理、工具调用和结果，这就是第 6 章要精读的事件日志的可视化；<strong>② 设置面板</strong>——模型、审批策略等都是配置项，因为「一切皆插件、一切皆配置」。</p>
 </div>
 <div class="alert alert-practice"><span class="alert-title">🛠 实操 1-B：打印你机器上真实的插件树</span><p><code>pnpm dsh --profile web --dump-config</code></p>
@@ -749,7 +750,7 @@ mvn compile exec:java -Dexec.args=&quot;读一下 pom.xml 告诉我项目叫什�
 <p>它意味着主循环没有任何特权地位：你可以写一个自己的循环插件（实现同样的 AgentFactory 接口）替换掉官方的 ReactLoopAgent——比如换成「先规划再执行」的两阶段循环、或实验性的循环策略——而清单里其他 31 行零件完全不知道、也不需要知道这件事。这就是「一切皆插件」的极端体现，第 3 章会看到对应的接口。</p>
 </details>
 <h2>Cordis 内核：插件系统的 5 个核心概念一切皆插件的「一切」二字，靠什么兑现</h2>
-<div class="alert alert-goals"><span class="alert-title">🎯 本章目标</span><p>① 掌握 Cordis 的 5 个概念——它们是读懂 dsh 任何一行源码的<strong>语法</strong>；② 精读仓库里最小的真实插件 <code>persona</code>（v0.2.0-rc.2 为 75 行）并逐段看懂；③ 亲手写一个插件并跑起来。本章是全书门槛最高的一章，慢即是快。</p>
+<div class="alert alert-goals"><span class="alert-title">🎯 本章目标</span><p>① 掌握 Cordis 的 5 个概念——它们是读懂 dsh 任何一行源码的<strong>语法</strong>；② 精读仓库里最小的真实插件 <code>persona</code>（v0.2.1-rc.2 仍为 75 行）并逐段看懂；③ 亲手写一个插件并跑起来。本章是全书门槛最高的一章，慢即是快。</p>
 </div>
 <div class="alert alert-tip"><span class="alert-title">😥 本章是全书最抽象的一章——先带走三句话，其余允许模糊</span><p>第一次读不必五概念全懂。<strong>保底三句话</strong>：① 插件 = 一个导出了 <code>apply(ctx)</code> 函数的文件；② <code>ctx</code> 是公共插座板——插件往上面「注册」自己的贡献（注册工具/注册提示词段落），需要别人时用 <code>inject</code> 按名字取；③ 插件卸载时，它注册过的一切被<strong>自动拆掉</strong>。<strong>拿这三句话就可以直接去读第 3 章</strong>（loop 非常具体，读完再回看本章会突然变简单）；事件五种模式、scope、Service 类形态，混个脸熟即可，后面用到哪章再回来看哪段。</p>
 </div>
@@ -815,7 +816,7 @@ mvn compile exec:java -Dexec.args=&quot;读一下 pom.xml 告诉我项目叫什�
   卸载：登记自动撤销（因为包在 effect 里）
 </code></pre>
 <p>下面这份 75 行的真实源码，只是把上面四行「填」成了带类型和校验的正式写法——<strong>逐段读时反复问自己：这行对应伪码的哪一句？</strong></p>
-<p>packages/preset/persona/src/index.ts（完整 75 行，v0.2.0-rc.2）</p>
+<p>packages/preset/persona/src/index.ts（完整 75 行，v0.2.1-rc.2 未变）</p>
 <pre><code>import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-system-prompt'
@@ -862,22 +863,27 @@ export function apply(ctx: Context, config: Config): void {   // ① apply 签�
 <div class="alert alert-info"><span class="alert-title">📘 逐段解剖（对着行号看）</span><p><strong>注入行</strong>：<code>inject = ['systemPrompt']</code>——本插件不自己干活，而是把贡献「寄存」到系统提示词服务里。<strong>配置行</strong>：Cordis 会用 schema 校验配置文件里给这个插件的参数，写错类型启动就报错（fail loud）；注意旧版的单一 <code>text</code> 字段已拆成 <strong><code>prefix</code>（必填）+ <code>suffix</code>（可选）</strong>。<strong>apply 里的核心</strong>：<code>ctx.systemPrompt.section({...})</code> 是向提示词注册表登记一个段落；<code>ctx.effect(注册, '标签')</code> 把「登记」变成「可撤销的登记」——v0.2.0-rc.2 里前缀、后缀各一个 effect。<strong>作用域（scope）机制</strong>：这个插件设计为挂在<strong>单个 agent 的作用域</strong>里（只影响一个会话的人设），挂在全局会与提示词注册表自己登记的 persona 撞名而「响亮地失败」（源文件头注释原话）——Cordis 的作用域让「全局一个样、某会话另一个样」成为可能，第 8 章的子 agent 会再遇到它。</p>
 </div>
 <p>再看一眼另一种形态——<strong>Service 类插件</strong>的样板（第 3 章主角 agent-loop 就是这么写的，这里只看骨架）：</p>
-<p>packages/core/agent-loop/src/index.ts（节选 359–375 行）</p>
-<pre><code>ctx.effect(() =&gt; ctx.agents.setFactory(this), 'agentLoop.setFactory()')   // 369 行
-
-/** 具体的 agent 工厂与驱动服务。 */
-export class AgentLoop extends Service implements AgentFactory {
+<p>packages/core/agent-loop/src/index.ts（节选 341–388 行）</p>
+<pre><code>/** 具体的 agent 工厂与驱动服务。 */
+export class AgentLoop extends Service implements AgentFactory {            // 341 行
   static inject = ['agents', 'sessions', 'llm', 'tools', 'systemPrompt', 'sessionProjections']
 
   /** 声明式 agent 的运行时 schema。 */
   static Config = z.object({
-    maxParallelToolCalls: z.number().step(1).min(1).default(DEFAULT_MAX_PARALLEL_TOOL_CALLS),
+    maxParallelToolCalls: z.number().step(1).min(1).default(DEFAULT_MAX_PARALLEL_TOOL_CALLS).volatile(),
     agents: z.array(z.object({ /* ... 每个要自动启动的 agent 的配置 ... */ })).default([]),
   }) as z&lt;Config&gt;
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'agentLoop')        // 向 ctx 占用 'agentLoop' 这个插座名
-    /* ... */
+    /* ... v0.2.1 起校验前置：配置先过 applyLauncherIdentities /
+       validateConfiguredAgents，全部通过才注册投影与工厂——
+       被拒绝的构造不会在投影注册表里留下半套注册（含一个
+       agentLoop.transactions() 的 generator effect：注册 turnBoundary
+       与 inbox 两个投影，卸载时按反序注销）... */
+    ctx.effect(() =&gt; ctx.agents.setFactory(this), 'agentLoop.setFactory()')   // 388 行
+    ctx.systemPrompt.variable('provider', /* ... */)
+    ctx.systemPrompt.variable('model', /* ... */)
   }
 }
 </code></pre>
@@ -910,7 +916,7 @@ export class AgentLoop extends Service implements AgentFactory {
 <div class="alert alert-goals"><span class="alert-title">🎯 本章目标</span><p>① 读懂 dsh 主循环的四层结构，并与第 0 章的裸 loop 逐行对照；② 掌握 turn/step 两级模型与一次对话产生的<strong>事件序列</strong>；③ 理解工具调用的并行调度规则；④ 能回答「dsh 的循环比 50 行裸循环多出来的每一行，分别在防什么坑」。</p>
 </div>
 <h3>3.1 先定位：循环在哪里，它也是插件</h3>
-<p>第 2 章结尾看到 <code>AgentLoop extends Service</code>——它启动时向 <code>ctx.agents</code> 注册自己为工厂（<code>ctx.agents.setFactory(this)</code>，index.ts 369 行）。而真正转起来的循环是另一个类：</p>
+<p>第 2 章结尾看到 <code>AgentLoop extends Service</code>——它启动时向 <code>ctx.agents</code> 注册自己为工厂（<code>ctx.agents.setFactory(this)</code>，index.ts 388 行）。而真正转起来的循环是另一个类：</p>
 <p>packages/core/agent-loop/src/agent.ts（98–138 行，节选）</p>
 <pre><code>/** 驱动一个会话穿越 turn 与 step 边界。 */
 export class ReactLoopAgent implements Agent {
@@ -966,7 +972,7 @@ turn/end
 </code></pre>
 <p>图中<strong>绿色</strong>的是<strong>持久会话事件</strong>（写进日志，重启后还在）；<strong>黄色</strong>的是<strong>活扩展点</strong>（进程内的监听器钩子，供插件拦截改写）。「持久事实」与「活钩子」分离，是 dsh 事件设计的第一原则。</p>
 <h3>3.3 精读 turn()：每一行都在记日志</h3>
-<p>packages/core/agent-loop/src/agent.ts（296–396 行，节选保留骨架）</p>
+<p>packages/core/agent-loop/src/agent.ts（298–398 行，节选保留骨架）</p>
 <pre><code>private async turn(): Promise&lt;boolean&gt; {
   /* ... 相位检查、abort 信号检查 ... */
   const turn = phase.turn + 1
@@ -1008,7 +1014,7 @@ turn/end
 <div class="alert alert-info"><span class="alert-title">📘 与裸 loop 的三个本质区别</span><p>① <strong>每一步都先记日志再干活</strong>：turn/start、step/start、user/message……哪怕崩溃，日志也精确记录到崩在哪一步（第 6 章你会看到崩溃恢复就是靠补写「缺的收尾事件」实现的）。② <strong>turn ≠ step</strong>：一次用户提问是一个 turn；模型连点 5 次工具就有 5 个 step，全部属于同一 turn。第 0 章的裸循环没有这个分层。③ <strong>结局是结构化的</strong>：completed / max-tokens / blocked / aborted / error 五种回合结局写进 <code>turn/end</code>，UI、审计、续跑都消费同一份事实。</p>
 </div>
 <h3>3.4 精读 step()：一次模型调用的完整生命周期</h3>
-<p>packages/core/agent-loop/src/agent.ts（398–544 行，骨架节选）</p>
+<p>packages/core/agent-loop/src/agent.ts（400–561 行，骨架节选）</p>
 <pre><code>private async step(decision: Extract&lt;PreparedStep, { kind: 'enter' }&gt;): Promise&lt;StepEndReason | null&gt; {
   // v0.1.7：签名改为收 preStep 的 decision（内含本次的 prompt assembly）
   const { turn, step, abort: { signal } } = this.phase
@@ -1049,7 +1055,7 @@ turn/end
   }
 }
 </code></pre>
-<p>和第 0 章逐步对照：<code>deriveMessages()</code> ≈ 裸 agent 的 <code>messages</code> 数组；<code>llm.stream(request)</code> ≈ <code>fetch(API_URL)</code>；<code>executeToolCalls()</code> ≈ 手写 for 循环执行 <code>tool_calls</code>。<strong>协议一模一样，工程密度天差地别</strong>。v0.1.7 的两处增量也值得注意：<code>prepareRequest()</code> 把「每次请求用哪个模型/通道」的决策收拢成一步；<code>systemPrompt.project()</code> 让系统提示词也走「模型可见 ⟺ 已落日志」——提示词段落的每次变化都以 <code>system/message</code> 事件形式可回放。</p>
+<p>和第 0 章逐步对照：<code>deriveMessages()</code> ≈ 裸 agent 的 <code>messages</code> 数组；<code>llm.stream(request)</code> ≈ <code>fetch(API_URL)</code>；<code>executeToolCalls()</code> ≈ 手写 for 循环执行 <code>tool_calls</code>。<strong>协议一模一样，工程密度天差地别</strong>。v0.1.7 的两处增量也值得注意：<code>prepareRequest()</code> 把「每次请求用哪个模型/通道」的决策收拢成一步；<code>systemPrompt.project()</code> 让系统提示词也走「模型可见 ⟺ 已落日志」——提示词段落的每次变化都以 <code>system/message</code> 事件形式可回放。v0.2.1 又补了两处同思想的细节（agent.ts 的 411–414 与 425–441 行）：<strong>请求准入时</strong>（真正要发请求了，而不是步骤开始时）再调一次 <code>systemPrompt.refreshContext()</code> 刷新运行时上下文——压缩刚做完、上下文刚变化时，发出去的请求拿到的也是最新投影；运行时上下文落日志改为识别 <code>source.kind === 'runtime-context'</code> 并用 <code>contextAdmitted</code> 去重，保证「上下文作为一条独立 user/message 只落一次」，压缩-恢复的往复不会让日志里堆出重复的用户消息。</p>
 <h3>3.5 精读 executeToolCalls()：并行与屏障</h3>
 <p>模型一次可能点 5 个菜。哪些能并行（比如同时读 3 个文件）？哪些必须串行（先写文件再跑测试）？规则在两个文件里：</p>
 <p>packages/core/agent-loop/src/tool-calls.ts（60–102 行，节选）</p>
@@ -1130,9 +1136,9 @@ turn/end
 </table>
 <p>回看第 3 章 <code>step()</code> 里那行 <code>this.loopCtx.llm.stream(request)</code>——循环层对「哪家模型、什么协议、如何重试」<strong>一无所知</strong>。这就是适配器接缝的意义：换模型 = 换一行清单配置（第 1 章 ① 行）。</p>
 <h3>4.2 精读 generate()：一次流式调用的骨架</h3>
-<div class="alert alert-warn"><span class="alert-title">⚠️ v0.1.3-alpha.1 → v0.1.7-rc.2：函数名变了</span><p>旧版教材精读的 <code>streamWithConnection()</code> <strong>已不存在</strong>，现拆成两个方法：<strong><code>generate()</code></strong>（流式骨架，下示）+ <strong><code>request()</code></strong>（真正的 HTTP/SSE 往返）。另外 <code>llm-deepseek</code> 包已从少数几个文件拆成 20 余个（新增 <code>transport.ts</code>、<code>request-files.ts</code>、<code>images.ts</code>、<code>replay.ts</code> 等），<code>adapter.ts</code> 只剩 160 行——<strong>按符号名搜索，别按行号找</strong>。</p>
+<div class="alert alert-warn"><span class="alert-title">⚠️ v0.1.3-alpha.1 → v0.1.7-rc.2：函数名变了</span><p>旧版教材精读的 <code>streamWithConnection()</code> <strong>已不存在</strong>，现拆成两个方法：<strong><code>generate()</code></strong>（流式骨架，下示）+ <strong><code>request()</code></strong>（真正的 HTTP/SSE 往返）。另外 <code>llm-deepseek</code> 包已从少数几个文件拆成 20 余个（新增 <code>transport.ts</code>、<code>request-files.ts</code>、<code>images.ts</code>、<code>replay.ts</code> 等），<code>adapter.ts</code> 在 v0.2.1-rc.2 为 178 行（新增了图片请求目标与 <code>admit</code> 准入钩子）——<strong>按符号名搜索，别按行号找</strong>。</p>
 </div>
-<p>packages/llm/llm-deepseek/src/adapter.ts（51–73 行，骨架节选）</p>
+<p>packages/llm/llm-deepseek/src/adapter.ts（65–89 行，骨架节选）</p>
 <pre><code>private async * generate(options: GenerateOptions, connection: C): AsyncGenerator&lt;StreamChunk&gt; {
   const consumer = new AbortController()
   // ① 调用方取消信号与内部取消信号合并成一个：谁先走都生效
@@ -1375,10 +1381,10 @@ public class StreamingAgent {
 <p>第 3 章 step() 里出错后走 <code>agent/request-error</code> waterfall，决定 retry 或放弃；判断依据是归一化后的 LlmError 码（RATE_LIMIT、TIMEOUT、SERVER…）。若每个适配器直接透传各家的错误文案，上层重试逻辑就得为每家写一套正则——接缝处必须输出稳定词汇。</p>
 </details>
 <h2>Tool 系统：从一个 todo 工具看全管线defineTool · 执行管线 · 审批 · 沙箱</h2>
-<div class="alert alert-goals"><span class="alert-title">🎯 本章目标</span><p>① 掌握工具的五要素定义与 <code>defineTool()</code> 的两档校验；② 精读全仓库最适合教学的工具 <code>todo_write</code>（v0.2.0-rc.2 为 212 行，一个文件讲完 schema、执行、持久化、UI 呈现）；③ 看清一次工具调用从「模型点菜」到「结果落日志」要过的每一道关；④ 实操：给裸 agent 加上「人工审批」。</p>
+<div class="alert alert-goals"><span class="alert-title">🎯 本章目标</span><p>① 掌握工具的五要素定义与 <code>defineTool()</code> 的两档校验；② 精读全仓库最适合教学的工具 <code>todo_write</code>（v0.2.1-rc.2 仍为 212 行，一个文件讲完 schema、执行、持久化、UI 呈现）；③ 看清一次工具调用从「模型点菜」到「结果落日志」要过的每一道关；④ 实操：给裸 agent 加上「人工审批」。</p>
 </div>
 <h3>5.1 工具的五要素</h3>
-<p>第 0 章里一个工具 = 「清单里的 schema + 一个 execute 函数」。生产级工具定义要丰满得多——<code>ToolDefinition</code> 接口（<code>packages/core/tools/src/index.ts</code> 223 行起；同组的 <code>schema.ts</code> 提供 <code>defineTool()</code> 与工具执行管线）：</p>
+<p>第 0 章里一个工具 = 「清单里的 schema + 一个 execute 函数」。生产级工具定义要丰满得多——<code>ToolDefinition</code> 接口（<code>packages/core/tools/src/index.ts</code> 224 行起；同组的 <code>schema.ts</code> 提供 <code>defineTool()</code> 与工具执行管线）：</p>
 <table>
 <thead>
 <tr>
@@ -1426,7 +1432,7 @@ public class StreamingAgent {
 </tbody>
 </table>
 <h3>5.2 精读 defineTool()：两档校验的智慧</h3>
-<p>packages/core/tools/src/schema.ts（545–617 行，节选）</p>
+<p>packages/core/tools/src/schema.ts（554–632 行，节选）</p>
 <pre><code>export function defineTool&lt;const S, const O&gt;(options: DefineToolOptions&lt;S, O&gt;): ToolDefinition {
   const parameters = parameterSchemaSpecToJsonSchema(options.parameters)   // DSL → JSON Schema
   const validate = (args: unknown): string[] =&gt; validateJsonSchemaValue(parameters, args, '')
@@ -1450,11 +1456,11 @@ public class StreamingAgent {
   return tool
 }
 </code></pre>
-<div class="alert alert-info"><span class="alert-title">📘 为什么展示要「软」、执行要「硬」？</span><p>源注释（594–597 行）说得清楚：展示回调可能在<strong>回放</strong>（replay）旧会话时被调用，参数也许是旧版 schema 下的合法值——这时展示应该优雅降级成默认卡片，而不是抛异常炸掉回放。而 <code>execute</code> 面对的是「模型此刻刚给出的参数」，必须硬校验。<strong>同一份 schema，两种校验烈度，各自服务各自的消费场景</strong>——这种细致是「能跑的 demo」与「能用的产品」的分水岭。</p>
+<div class="alert alert-info"><span class="alert-title">📘 为什么展示要「软」、执行要「硬」？</span><p>源注释（609–612 行）说得清楚：展示回调可能在<strong>回放</strong>（replay）旧会话时被调用，参数也许是旧版 schema 下的合法值——这时展示应该优雅降级成默认卡片，而不是抛异常炸掉回放。而 <code>execute</code> 面对的是「模型此刻刚给出的参数」，必须硬校验。<strong>同一份 schema，两种校验烈度，各自服务各自的消费场景</strong>——这种细致是「能跑的 demo」与「能用的产品」的分水岭。</p>
 </div>
 <h3>5.3 精读 tool-todo：一个文件讲完工具的全部</h3>
 <p><code>todo_write</code> 是 agent 的「待办清单」工具（你在很多 coding agent 里见过它）。它同时展示了两件事：如何定义工具，以及如何把工具状态做成<strong>事件溯源</strong>（第 6 章的预告）。</p>
-<p>packages/todo/tool-todo/src/index.ts（22–211 行，节选）</p>
+<p>packages/todo/tool-todo/src/index.ts（22–211 行，节选；v0.2.1 删掉了包里另一个文件 src/invariant.ts，全包正文确实只剩这一个 index.ts、仍 212 行）</p>
 <pre><code>export const name = 'tool-todo'
 export const inject = ['tools', 'sessionProjections']      // 要往两张注册表寄存
 
@@ -1547,27 +1553,26 @@ export function apply(ctx: Context, config: Config): void {
 </ul>
 <p>这一设计的直接红利：重启恢复（读日志即可）、fork（复制前缀日志）、回放/审计/搜索（日志天然就是时间线）、UI 渲染（订阅同一事件流）——全部是同一份数据的不同读法。</p>
 <h3>6.2 精读 append()：一次追加的完整仪式</h3>
-<p>packages/core/session/src/index.ts（699–749 行，节选）</p>
+<p>packages/core/session/src/index.ts（798–832 行，节选）</p>
 <pre><code>append&lt;T extends SessionEventType&gt;(type: T, data: SessionEventMap[T], ...opts): SessionEvent&lt;T&gt; {
   const dataSnapshot = snapshotJsonValue(data)          // ① 深快照：防调用方事后篡改
   if (dataSnapshot === undefined)
     throw new Error(`session event &quot;${type}&quot; carries non-JSON-serializable data`)
-  const event = deepFreeze({                            // ② 组装并深度冻结
+  const entry = this.publicationEntry()                 // ② 发布期重入卫兵（v0.2.1 新增）：
+                                                        //    通知环节里再调 append 直接抛错
+  const event = deepFreeze({                            // ③ 组装并深度冻结
     type,
     seq: SessionSeq(this.log.length),                   //    seq = 数组下标 = 全序位置
     time: Date.now(),
     data: dataSnapshot,
     ...surfaceMetadataSnapshot,                         //    消息类事件带 surfaceOp 元数据
   })
-  this.surfaceManager.validateNext(event)               // ③ 预先校验「表面」合法性
-
-  /* ... 收集监听器 → 入日志 → 逐个通知（监听器出错被收容，不影响日志）... */
-  this.log.push(event)                                  // ④ 入日志（同步、内存、无 IO）
-  /* 通知 'session/event' 广播 */
+  validateSessionEventData(event, /* ... */)            // ④ 事件级语法校验
+  this.commit(event, entry)                             // ⑤ validateNext 预校验表面 → 入日志 → 通知
   return event
 }
 </code></pre>
-<p>四个关键点：① <strong>必须可 JSON 序列化</strong>——因为日志最终要落盘，BigInt/函数/Date 一律启动期拒绝（源注释列了整整一串）；② <strong>deepFreeze</strong>——事件入日志后无人可改，包括框架自己；③ <strong>seq 单调递增</strong>——整个系统的事件排序、恢复点、引用（如 tool/result 引用它对应的 tool/call 的 seq）全靠它；④ <strong>追加永不阻塞 IO</strong>——持久化插件在旁路异步缓冲，热路径只动内存。</p>
+<p>四个关键点：① <strong>必须可 JSON 序列化</strong>——因为日志最终要落盘，BigInt/函数/Date 一律启动期拒绝（源注释列了整整一串）；② <strong>deepFreeze</strong>——事件入日志后无人可改，包括框架自己；③ <strong>seq 单调递增</strong>——整个系统的事件排序、恢复点、引用（如 tool/result 引用它对应的 tool/call 的 seq）全靠它；④ <strong>追加永不阻塞 IO</strong>——持久化插件在旁路异步缓冲，热路径只动内存。v0.2.1 把这条仪式收紧了两扣：「表面合法性预校验」（原节选里的第 ③ 步）移进了私有的 <code>commit()</code>（现 876–897 行，仍是入日志前的第一件事）；并新增发布期<strong>重入卫兵</strong>——append 的监听器通知环节里若再有人调 append，直接抛错，杜绝「通知里改日志」这类自噬路径。</p>
 <p>一条落盘的事件长这样（示意）：</p>
 <pre><code>{ &quot;type&quot;: &quot;tool/call&quot;, &quot;seq&quot;: 17, &quot;time&quot;: 1757000000000,
   &quot;data&quot;: { &quot;turn&quot;: 1, &quot;step&quot;: 1, &quot;callId&quot;: &quot;call_abc&quot;, &quot;name&quot;: &quot;read_file&quot;,
@@ -1578,9 +1583,9 @@ export function apply(ctx: Context, config: Config): void {
 </code></pre>
 <h3>6.3 精读 deriveMessages()：消息历史是算出来的</h3>
 <p>日志里绝大多数事件（turn/start、请求头、压缩标记……）模型根本不该看见。哪些该进 <code>messages</code>？答案是只有五类「产消息事件」（user/message、assistant/message、tool/result 等），且它们追加时必须声明 <code>surfaceOp</code>——如何进入一个叫<strong>表面（surface）</strong>的有序序列。派生就沿表面走：</p>
-<div class="alert alert-info"><span class="alert-title">📘 v0.1.7-rc.2：deriveMessages 是「增量缓存投影」</span><p>当前的实现（<code>packages/core/session/src/index.ts:860</code> 起）不是每次都从表面头扫到尾：它维护 <code>derivedGeneration</code> / <code>derivedNodes</code> 两个游标——<strong>纯尾部增长只花 O(新节点)</strong>；一旦发生替换或内容代际变化（<code>surface.contentGeneration</code> 变动）就整体重建。返回的数组是每次调用的全新快照，但其中的 <code>Message</code> 对象是<strong>共享且深冻结</strong>的——消费者既不能改历史，也不会持有越滚越大的旧数组。</p>
+<div class="alert alert-info"><span class="alert-title">📘 v0.1.7-rc.2：deriveMessages 是「增量缓存投影」</span><p>当前的实现（<code>packages/core/session/src/index.ts:984</code> 起）不是每次都从表面头扫到尾：它维护 <code>derivedGeneration</code> / <code>derivedNodes</code> 两个游标——<strong>纯尾部增长只花 O(新节点)</strong>；一旦发生替换或内容代际变化（<code>surface.contentGeneration</code> 变动）就整体重建。返回的数组是每次调用的全新快照，但其中的 <code>Message</code> 对象是<strong>共享且深冻结</strong>的——消费者既不能改历史，也不会持有越滚越大的旧数组。</p>
 </div>
-<p>packages/core/session/src/index.ts（844–868 行，节选）</p>
+<p>packages/core/session/src/index.ts（967–1007 行，节选）</p>
 <pre><code>/**
  * 沿表面维护的有序产消息事件序列行走，派生 LLM 消息历史。
  * 表面是派生历史的唯一来源：每条产消息的 append 都记录了自己的 surfaceOp，
@@ -1590,7 +1595,7 @@ export function apply(ctx: Context, config: Config): void {
  */
 deriveMessages(): Message[] {
   const surface = this.surface
-  if (surface.replaceGeneration !== this.derivedGeneration) {  // 表面被重写(压缩)→重建
+  if (surface.contentGeneration !== this.derivedGeneration) {  // 表面被重写(压缩)→重建
     this.derived = []; this.derivedNodes = 0; /* ... */ }
   for (const seq of surface.nodes.slice(this.derivedNodes)) {  // 只投影增量
     const msg = this.deriveEventMessage(this.log[seq]!)        // 事件 → Message
@@ -1602,7 +1607,7 @@ deriveMessages(): Message[] {
 <p>两个精妙处：<strong>增量缓存</strong>——每步只需投影新节点，30 轮对话也不会越算越慢；<strong>replace 世代号</strong>——第 7 章的压缩会「重写表面」（把旧节点遮蔽掉），世代号一变整个投影自动重建。模型历史因此既<strong>可裁剪</strong>（改表面不改日志）又<strong>永不丢</strong>（原文都在日志里）——这就是第 0 章自测埋的问题「为什么敢随便裁剪」的答案。</p>
 <h3>6.4 投影、持久化与恢复</h3>
 <ul>
-<li><strong>通用投影注册表</strong>：<code>ctx.sessionProjections</code>（packages/session/session-projection/）。你在 5.3 节见过 <code>todos</code> 单元，第 3 章见过 agent-loop 注册的 <code>turnBoundary</code>（index.ts 56–94 行：折叠 turn/start、step/start 等事件成「当前回合状态」，供 UI 与恢复逻辑读取）。写法统一四件套：<code>key / init / apply / stateSchema</code>。</li>
+<li><strong>通用投影注册表</strong>：<code>ctx.sessionProjections</code>（packages/session/session-projection/）。你在 5.3 节见过 <code>todos</code> 单元，第 3 章见过 agent-loop 注册的 <code>turnBoundary</code>（注册在 <code>packages/core/agent-loop/src/index.ts</code> 46–95 行定义、378 行注册：折叠 turn/start、step/start 等事件成「当前回合状态」，供 UI 与恢复逻辑读取；注册表本身的契约接口在 session-projection 的 index.ts 56–94 行）。写法统一<strong>六件套</strong>：<code>key / stateSchema / init / apply / stateVersion</code>（v0.2.1 起必填——持久化缓存失效版本号，改了折叠语义或状态字段就递增，让旧版本号缓存下的折叠结果整体作废而不是被新语义错误续算）与可选的 <code>wire</code>（<code>viewSchema + view</code>，给客户端的只读视图；纯宿内单元可省略）。</li>
 <li><strong>持久化</strong>：<code>session-persistence</code> 定义后端接口（create/open/stat/list…），默认实现 <code>session-persistence-jsonl</code> 把每个会话存成 <code>~/.dsh/sessions/&lt;会话id&gt;/session.v4.jsonl</code>（可选 zstd 压缩，sdk-minimal 清单里 <code>compression: none</code>）。当前格式版本是 <strong>4</strong>（<code>SESSION_FORMAT_VERSION = 4</code>），迁移包按代际一一对应：v0→v1、v1→v2、v2→v3、v3→v4，<strong>已提交的历史文件永不改名/替换/删除</strong>。</li>
 <li><strong>恢复与崩溃修复</strong>：resume 时先拿写句柄（同一会话 id 同时只有一个人能写），读出全部事件；若进程上次死在半路（比如 turn 开了没关），<code>interruptedTurnClosers()</code> 会补写缺失的收尾事件（合成的 tool 错误、step/end、turn/end）再继续——第 3 章说「每一步先记日志」，在这里兑现成「从任意断点都能接上」。</li>
 <li><strong>fork</strong>：新 agent 以某日志前缀为种子（seed）创建，父子各自追加互不影响——第 8 章子 agent 的 fork 后端就建在此之上。</li>
@@ -1772,10 +1777,10 @@ deriveMessages(): Message[] {
 </table>
 <p>子 agent 是完整的一等 agent：有自己的会话日志、自己的工具作用域（第 2 章的 scope：子 agent 的 persona/工具都可以单独配置）；父 agent 通过委托工具收到的只是<strong>子 agent 的结论</strong>。此外还有对接外部产品的后端（acp / claude-code / codex / dsh-sdk）——「委托给谁」同样是一个接缝。</p>
 <h3>8.2 skill：把套路沉淀成文件</h3>
-<p><code>packages/skill/</code> 实现「技能包」：一个目录 + 一个 <code>SKILL.md</code>（带 name/description 前言 + 正文操作指南），由 <code>skill-filesystem</code> 从固定位置发现（index.ts 246–253 行）：</p>
+<p><code>packages/skill/</code> 实现「技能包」：一个目录 + 一个 <code>SKILL.md</code>（带 name/description 前言 + 正文操作指南），由 <code>skill-filesystem</code> 从固定位置发现（index.ts 244–257 行）：</p>
 <ul>
 <li>项目级：<code>&lt;项目&gt;/.dsh/skills/</code> 与 <code>&lt;项目&gt;/.agents/skills/</code></li>
-<li>用户级：<code>~/.dsh/skills/</code></li>
+<li>用户级：<code>~/.dsh/skills/</code> 与 <code>~/.agents/skills/</code>（跨工具共享的 agents 根；另有 <code>customSkillDirs</code> 配置键与插件自带的 bundled 技能根，优先级 100–600 六来源）</li>
 </ul>
 <p>技能目录汇入 <code>ctx.skills</code> 注册表；<code>tool-skill</code> 给模型一个「加载技能」工具，用户也可用 <code>/技能名</code> 直呼。技能的本质是<strong>上下文的按需注入</strong>：平时只把技能的 name+description 占一点清单空间，命中后才把正文展开进提示词——和第 7 章的 spill 恰好互补（spill 管「太长的结果」，skill 管「太长的操作知识」）。</p>
 <h3>8.3 plan 与 goal：给循环装上「方向盘」和「终点线」</h3>
@@ -1847,7 +1852,7 @@ deriveMessages(): Message[] {
       })
       break
     }
-    /* plugin / dump-config 两个分支同样薄——CLI 只是启动器的门面 */
+    /* plugin / dump-config / dump-config-schema 几个分支同样薄——CLI 只是启动器的门面 */
   }
 }
 </code></pre>
@@ -1907,7 +1912,7 @@ deriveMessages(): Message[] {
 <div class="alert alert-goals"><span class="alert-title">🎯 本章解决的真实问题</span><p>「上线第三天，供应商限流。一个 20 步的任务在第 14 步收到 429，裸 agent 直接崩掉——前 13 步全部白跑，用户重新提问，又烧一遍 token。」以及它的孪生问题：「进程半夜被 OOM kill，重启后任务从哪继续？」</p>
 </div>
 <h3>一、错误码是协议，不是日志文本</h3>
-<p>一切可靠性的起点：<strong>用稳定机器码路由错误，永远不要解析错误消息字符串</strong>（dsh 的 HarnessError 源码注释原话：*"route on <code>code</code>, never by parsing <code>message</code>"*）。第 4 章见过适配器把 HTTP 状态翻译成稳定码，这里是完整映射（<code>llm-deepseek/src/transport.ts</code> 的 <code>providerError()</code>，22–43 行）：</p>
+<p>一切可靠性的起点：<strong>用稳定机器码路由错误，永远不要解析错误消息字符串</strong>（dsh 的 HarnessError 源码注释原话：*"route on <code>code</code>, never by parsing <code>message</code>"*）。第 4 章见过适配器把 HTTP 状态翻译成稳定码，这里是完整映射（<code>llm-deepseek/src/transport.ts</code> 的 <code>providerError()</code>，22–44 行）：</p>
 <table>
 <thead>
 <tr>
@@ -1945,7 +1950,7 @@ deriveMessages(): Message[] {
 <tr>
 <td>流中断 / 空响应 / 超时</td>
 <td><code>TRANSPORT</code> / <code>EMPTY_RESPONSE</code> / <code>TIMEOUT</code></td>
-<td>退避重试</td>
+<td>退避重试（注：这三类不在 <code>providerError()</code> 里产生——它对无 status 的兜底是 <code>SERVER</code>；<code>TRANSPORT</code>/<code>TIMEOUT</code> 由 <code>adapter.ts</code> 的 <code>generate()</code> 兜底译出，<code>EMPTY_RESPONSE</code> 由流消费层判定）</td>
 </tr>
 </tbody>
 </table>
@@ -1954,11 +1959,11 @@ deriveMessages(): Message[] {
 <p>dsh 的重试设计有两个反直觉但极合理的决定：</p>
 <ol>
 <li><strong>策略放在供应商配置里，不放重试插件里</strong>。llm-retry 插件的 Config 是空的——你若把 retryPolicy 写在它名下，启动直接报错：*"retryPolicy belongs under each provider configuration"*。因为「怎么重试」是每家供应商的属性（DeepSeek 的 429 特征和别家不同），跟执行机制无关。</li>
-<li><strong>执行器挂在 <code>agent/request-error</code> waterfall 上</strong>（llm-retry/src/index.ts 共 259 行，监听注册在 195 行附近；loop 在 agent.ts:494 派发 <code>dispatch.waterfall('agent/request-error', …)</code>）。这意味着：<strong>重试只是一个普通的恢复策略插件</strong>。你完全可以写自己的监听器实现别的恢复动作——比如 <code>RATE_LIMIT</code> 时切换到备用模型（降级路由），这是裸 agent 做不到的扩展方式。</li>
+<li><strong>执行器挂在 <code>agent/request-error</code> waterfall 上</strong>（llm-retry/src/index.ts 共 259 行，监听注册在 195 行附近；loop 在 agent.ts:511 派发 <code>dispatch.waterfall('agent/request-error', …)</code>）。这意味着：<strong>重试只是一个普通的恢复策略插件</strong>。你完全可以写自己的监听器实现别的恢复动作——比如 <code>RATE_LIMIT</code> 时切换到备用模型（降级路由），这是裸 agent 做不到的扩展方式。</li>
 </ol>
-<p>默认可重试码集合（<code>DEFAULT_RETRYABLE_CODES</code>，retry-policy.ts）：<code>EMPTY_RESPONSE、RATE_LIMIT、SERVER、TIMEOUT、TRANSPORT</code>。注意 <code>INVALID_CREDENTIAL</code> 被刻意排除——源注释："格式错误的凭据在每次尝试中都会同样地失败"。</p>
+<p>默认可重试码集合（<code>DEFAULT_RETRYABLE_CODES</code>，定义在 <strong><code>packages/llm/llm/src/retry-policy.ts</code></strong>——注意它在 llm 核心包而非 llm-retry 插件包）：<code>EMPTY_RESPONSE、RATE_LIMIT、SERVER、TIMEOUT、TRANSPORT</code>。注意 <code>INVALID_CREDENTIAL</code> 被刻意排除——源注释："格式错误的凭据在每次尝试中都会同样地失败"。</p>
 <h4>退避算法（抄作业可直接用）</h4>
-<p>packages/llm/llm-retry/src/index.ts（59–66 行 localDelay）+ retry-policy.ts（默认策略定义）</p>
+<p>packages/llm/llm-retry/src/index.ts（59–66 行 localDelay）+ packages/llm/llm/src/retry-policy.ts（默认策略定义）</p>
 <pre><code>localDelay = min(initialDelayMs * 2^min(retry-1, 1024), maxDelayMs)
 jitter     = 1 - jitterRatio + 2 * jitterRatio * random()   // 对称乘法抖动
 delay      = clamp(localDelay * jitter, maxDelayMs)
@@ -1993,7 +1998,7 @@ delay      = clamp(localDelay * jitter, maxDelayMs)
 <p>顺序即优先级：<strong>能用物理强制的绝不靠劝导</strong>。第 5 章讲过管线位置，本章讲每一道墙的工程细节。</p>
 <h3>二、沙箱：策略如何变成真的墙</h3>
 <h4>解析：一个会话 Effective 模式从哪来</h4>
-<p><code>ctx.sandboxPolicy.resolve()</code>（sandbox-policy/src/index.ts 163–170 行）的优先级：<strong>本次调用的升级覆盖 &gt; 会话级 <code>sandbox/mode</code> 投影覆盖 &gt; 部署默认值</strong>。两个值得注意的设计：① schema 默认值是 <code>read-only</code>——<strong>fail-safe 默认档</strong>，忘了配置也安全；② 会话级覆盖是<strong>一条 log-only 事件</strong>（<code>sandbox/mode</code>），重启后靠回放恢复——「当前档位」也是日志折叠，和其他一切状态同构。解析出的策略还会渲染进系统提示词（<code>'sandbox:policy'</code> 段，明确告诉模型「workspace-write 档下你可以写 <workspaceRoot> 下的文件」）——<strong>把墙的位置告诉囚徒，反而减少撞墙</strong>，这是诚实设计。</p>
+<p><code>ctx.sandboxPolicy.resolve()</code>（sandbox-policy/src/index.ts 164–170 行）的优先级：<strong>本次调用的升级覆盖 &gt; 会话级 <code>sandbox/mode</code> 投影覆盖 &gt; 部署默认值</strong>。两个值得注意的设计：① schema 默认值是 <code>read-only</code>——<strong>fail-safe 默认档</strong>，忘了配置也安全；② 会话级覆盖是<strong>一条 log-only 事件</strong>（<code>sandbox/mode</code>），重启后靠回放恢复——「当前档位」也是日志折叠，和其他一切状态同构。解析出的策略还会渲染进系统提示词（<code>'sandbox:policy'</code> 段，明确告诉模型「workspace-write 档下你可以写 <workspaceRoot> 下的文件」）——<strong>把墙的位置告诉囚徒，反而减少撞墙</strong>，这是诚实设计。</p>
 <h4>强制：跨平台的三套真墙</h4>
 <p>packages/sandbox/sandbox-local/src/index.ts（160–215 行，节选）</p>
 <pre><code>PLATFORM_CHAINS = {
@@ -2059,7 +2064,7 @@ DENIAL_SIGNATURES = {             // 每个后端有自己的「拒绝方言」�
 </tbody>
 </table>
 <h3>四、不可信输入的卫生学</h3>
-<p>官方 <code>docs/defensive-patterns.md</code> 里与注入直接相关的两条，值得全文背下来：<strong>「绝不把环境变量或可预测路径交给不可信输出」</strong>——spawn 子命令前清洗环境变量（<code>*KEY*</code>/<code>*SECRET*</code>/<code>*TOKEN*</code>/<code>*PASSWORD*</code> 模式命中即剔除）；临时/外溢文件用私有 0700 目录、随机文件名、独占 <code>wx</code>/<code>0600</code> 打开；<strong>「先摘掉链接形路径」</strong>——删除前 <code>lstatSync().isSymbolicLink()</code> 判断后 unlink，防止模型被诱导经由符号链接写到墙外（其余五条见进阶 5 的完整清单）。记住这条铁律：<strong>工具结果（文件内容、网页、命令输出）都是注入面，防注入靠沙箱与审批兜底，不靠提示词洁身自好</strong>。</p>
+<p>官方 <code>docs/defensive-patterns/general.zh.md</code>（v0.2.1 起从单文件拆分为五分类目录）里与注入直接相关的两条，值得全文背下来：<strong>「绝不把环境变量或可预测路径交给不可信输出」</strong>——spawn 子命令前清洗环境变量（<code>*KEY*</code>/<code>*SECRET*</code>/<code>*TOKEN*</code>/<code>*PASSWORD*</code> 模式命中即剔除）；临时/外溢文件用私有 0700 目录、随机文件名、独占 <code>wx</code>/<code>0600</code> 打开；<strong>「先摘掉链接形路径」</strong>——删除前 <code>lstatSync().isSymbolicLink()</code> 判断后 unlink，防止模型被诱导经由符号链接写到墙外（其余各条见进阶 5 的分类导航——general 一类就有 15 条）。记住这条铁律：<strong>工具结果（文件内容、网页、命令输出）都是注入面，防注入靠沙箱与审批兜底，不靠提示词洁身自好</strong>。</p>
 <div class="alert alert-info"><span class="alert-title">📘 落地决策清单：安全</span><p>① <strong>环境↔档位映射</strong>：本地开发 <code>workspace-write</code> + <code>ask</code>；CI/自动化 <code>read-only</code> 或 <code>workspace-write</code> + 审批 <code>never</code>（等价于全自动拒绝，宁可不跑不可乱写）；生产 agent <code>workspace-write</code> + 升级审批 + 对 <code>approval/decided</code> 事件接告警；<strong>永不</strong>在生产用 <code>danger-full-access</code>（它只属于 sdk-minimal 这类你完全自担风险的极简档）。② <strong>密钥只走引用</strong>：配置里写 <code>apiKeyEnv: DEEPSEEK_API_KEY</code>（环境变量名），密钥本体绝不落配置文件——第 1 章清单就是这么写的。③ <strong>Windows 生产补偿</strong>：档位是 partial，加容器/VM，或用 <code>packages/ssh/*</code> 提供的远端执行世界。④ <strong>把「拒绝」当反馈</strong>：不要绕过沙箱去「让模型顺利跑通」，先问这个操作该不该发生。</p>
 </div>
 <div class="alert alert-practice"><span class="alert-title">🛠 实操 A2：三分钟体验三道墙</span><ol>
@@ -2080,7 +2085,7 @@ DENIAL_SIGNATURES = {             // 每个后端有自己的「拒绝方言」�
 </div>
 <h3>一、计量先行：TokenMeter 的设计宣言</h3>
 <p>dsh 的 token 计量服务（<code>ctx.tokenMeter</code>，packages/llm/token-meter/）第一条让人愣住、第二条让人叫好的设计：<strong>它拒绝一切配置</strong>——<code>static Config = z.object({})</code>，传入任何键都启动报错 *"TokenMeterConfig: unknown key … (no settings are supported)"*。零可调项本身就是设计：计量必须无条件发生，不存在「为了省 CPU 关掉计量」的选项——关掉计量的组织会在月底付出更大代价。</p>
-<p>计量从哪来？还是老朋友——<strong>日志折叠</strong>：用量数据落在 <code>assistant/message</code> 事件的 <code>usage</code> 字段（<code>TokenUsage</code> 四个<strong>不相交</strong>的桶：<code>inputTokens</code>（未缓存部分）、<code>outputTokens</code>、<code>cacheReadTokens</code>、<code>cacheWriteTokens</code>），meter 把日志增量折叠成三张可回放的投影表（tokenUsage / contextPressure / contextBreakdown）。一条防自欺的保守规则（index.ts 166–168 行）：<strong>供应商回报的用量只有在 ≥ 本地启发式估计值时才被采信</strong>——供应商少报永远不会导致压力被低估。</p>
+<p>计量从哪来？还是老朋友——<strong>日志折叠</strong>：用量数据落在 <code>assistant/message</code> 事件的 <code>usage</code> 字段（<code>TokenUsage</code> 四个<strong>不相交</strong>的桶：<code>inputTokens</code>（未缓存部分）、<code>outputTokens</code>、<code>cacheReadTokens</code>、<code>cacheWriteTokens</code>），meter 把日志增量折叠成三张可回放的投影表（tokenUsage / contextPressure / contextBreakdown）。一条防自欺的保守规则（<code>packages/llm/token-meter/src/index.ts</code> 166–168 行）：<strong>供应商回报的用量只有在 ≥ 本地启发式估计值时才被采信</strong>——供应商少报永远不会导致压力被低估。</p>
 <div class="alert alert-info"><span class="alert-title">📘 缓存桶是最便宜的钱</span><p>四个桶分开计量意味着你能算出<strong>缓存命中率</strong>——长会话 agent 的第一成本杠杆就是把重复的 system prompt / 历史前标题住缓存（cacheRead 的单价通常是 input 的零头）。如果你的账单里 cacheWrite 高、cacheRead 低，说明有什么在频繁打破缓存前缀（比如每次都改写系统提示词开头——回到第 4 章想想 request/header 的 diff 该怎么用）。</p>
 </div>
 <h3>二、推理分层：dsh 自己怎么省 thinking token</h3>
@@ -2131,7 +2136,7 @@ DENIAL_SIGNATURES = {             // 每个后端有自己的「拒绝方言」�
 <li><strong>错误码族</strong>：<code>SESSION_QUERY_INVALID_QUERY / CURSOR / LIMIT / FILTER</code>——又是「按码路由」。</li>
 </ul>
 <h3>三、让模型自查历史——以及为此付出的安全设计</h3>
-<p>dsh 给模型本人也发了探照灯：<code>tool:session-query</code> 工具集（session_search / session_event_search / session_trace / session_event_trace / session_event_read），模型可以搜索<strong>之前的会话</strong>、追溯事件谱系。但 operations.ts 里三道闸门是精髓：<strong>跨会话搜索被强制过滤到调用方工作区</strong>（cwd 硬过滤，90 行）；<strong>父子会话访问重新过授权</strong>（不因血缘豁免）；<strong>当前会话的事件搜索截止在当前 step 边界之前</strong>（128–139 行）——<strong>模型永远读不到比自己更新的历史</strong>。最后这条最深刻：它保证了「自查」不能变成「看到自己正在被审计而篡改应对」。</p>
+<p>dsh 给模型本人也发了探照灯：<code>tool:session-query</code> 工具集（实现位于 <code>packages/experimental/tool-session-query/</code>，实验包目录；其 SQLite 索引后端在 <code>packages/session-query/session-query-sqlite/</code>）（session_search / session_event_search / session_trace / session_event_trace / session_event_read），模型可以搜索<strong>之前的会话</strong>、追溯事件谱系。但 operations.ts 里三道闸门是精髓：<strong>跨会话搜索被强制过滤到调用方工作区</strong>（cwd 硬过滤，operations.ts 90 行）；<strong>父子会话访问重新过授权</strong>（不因血缘豁免）；<strong>当前会话的事件搜索截止在当前 step 边界之前</strong>（127–139 行）——<strong>模型永远读不到比自己更新的历史</strong>。最后这条最深刻：它保证了「自查」不能变成「看到自己正在被审计而篡改应对」。</p>
 <h3>四、调试工作流与复盘文化</h3>
 <p>① 定位：检索/导出日志找嫌疑事件 seq→ ② 复现：以该 seq 前缀 fork 新会话（第 8 章）→ ③ 假设：patch 配置或挂 mock 模型重放→ ④ 验证：diff 修复前后的 request/header 与行为</p>
 <p>dsh 官方 <code>docs/postmortem/</code> 里有四篇真实事故复盘（他们把「微妙 + 系统性 + 重新发现成本高」作为收录标准）——每一条都是生产教训的浓缩，推荐精读：</p>
@@ -2219,7 +2224,7 @@ DENIAL_SIGNATURES = {             // 每个后端有自己的「拒绝方言」�
 <p>选型错误是上游事故：在 CI 里用 <code>web</code>（agent 卡在等人点批准），在多人产品里用 <code>sdk-minimal</code>（沙箱全开）。还有一个特殊的「形态」：<strong>把执行世界整个搬走</strong>——<code>packages/ssh/</code> 把 <code>ctx.fs</code> 与 <code>ctx.subprocess</code> 换成远程实现（<code>ssh</code> 定义接缝，<code>fs-ssh</code> / <code>subprocess-ssh</code> / <code>sandbox-ssh</code> 提供远程实现），shell/终端/LSP 一行不改照常工作（它们坐在接缝上，不碰本地进程 API）——这就是第 4 章「接缝」的回报：<strong>换世界不换产品</strong>。远程沙箱按合同是临时的，适合隔离不可信代码与数据；注意它是实验性能力，官方没有默认启用。</p>
 <h3>二、配置治理：供应链防线 + 配置即文档</h3>
 <h4>.env 分层的 denylist（防供应链投毒）</h4>
-<p>dsh 的环境变量分三层合成（<code>loadLayeredEnv</code>，app-boot/src/index.ts 198–219 行）：进程环境 &gt; 项目 <code>.env</code> &gt; 主目录 <code>~/.dsh/.env</code>。但有一份<strong>启动专属名单</strong>（<code>BOOTSTRAP_NAMES</code>，96–117 行）只能来自<strong>最外层启动环境</strong>：<code>PATH、HOME、NODE_OPTIONS、LD_PRELOAD、BASH_ENV、GIT_*、DEEPSEEK_BASE_URL、HTTP_PROXY…、NODE_TLS_REJECT_UNAUTHORIZED</code> 以及 <code>DSH_*</code>/<code>XDG_*</code> 等前缀。理由直白：<strong>你克隆来的仓库，它的 .env 不许改写你的可执行路径、不许关 TLS 校验、不许改代理</strong>——这是对「随手 copy .env」攻击面的系统性封堵。唯一的例外是代理类变量只允许主目录层设置（企业内网代理是环境属性，不是项目属性）。</p>
+<p>dsh 的环境变量分三层合成（<code>loadLayeredEnv</code>，app-boot/src/index.ts 238–261 行）：进程环境 &gt; 项目 <code>.env</code> &gt; 主目录 <code>~/.dsh/.env</code>。但有一份<strong>启动专属名单</strong>（<code>BOOTSTRAP_NAMES</code>，136–168 行，v0.2.1 又吸收了 PERL5OPT、JAVA_TOOL_OPTIONS、SSL_CERT_FILE 等新成员）只能来自<strong>最外层启动环境</strong>：<code>PATH、HOME、NODE_OPTIONS、LD_PRELOAD、BASH_ENV、GIT_*、DEEPSEEK_BASE_URL、HTTP_PROXY…、NODE_TLS_REJECT_UNAUTHORIZED</code>，前缀类保留 <code>DSH_* / XDG_* / DYLD_* / BASH_FUNC_*</code>。理由直白：<strong>你克隆来的仓库，它的 .env 不许改写你的可执行路径、不许关 TLS 校验、不许改代理</strong>——这是对「随手 copy .env」攻击面的系统性封堵。v0.2.1 还把封堵升级为<strong>响亮失败</strong>：.env 里出现名单命中项不再被忽略，而是直接抛错拒绝启动；唯一例外是代理类变量（<code>HTTP(S)_PROXY / ALL_PROXY / NO_PROXY</code>）允许主目录层设置（企业内网代理是环境属性，不是项目属性）。</p>
 <h4>配置目录：让「配置能写什么」有唯一权威答案</h4>
 <p>「这个插件的 config 里能写哪些键？」——答案必须不是翻源码。<code>docs/config-catalog.md</code> 由脚本生成（<code>pnpm run gen-config-catalog</code>）：对每个可加载包，原样粘贴它接受的配置声明（连 JSDoc 注释）、列出它依赖注入的服务、给出源码行号链接；<strong>CI 会交叉校验生成的文档与运行时 schema 一致</strong>——加载器接受的字段不可能在文档里隐藏。这是「配置即文档」的 CI 化，你的自有插件也应该进这个目录。</p>
 <h3>三、启动即体检 + 运行时不变量</h3>
@@ -2229,12 +2234,13 @@ DENIAL_SIGNATURES = {             // 每个后端有自己的「拒绝方言」�
 </ul>
 <h3>四、中间件与测试：llm/stream waterfall 的正确用法</h3>
 <p>进阶 1 说重试挂在 <code>agent/request-error</code>；模型调用的正面拦截点是 <code>'llm/stream'</code> waterfall（llm/src/index.ts 75 行声明，带 <code>@mode waterfall</code> 标注）：监听器调 <code>next()</code> 放行给真实适配器，或<strong>直接 yield 自己的 chunk 短路</strong>——这就是 mock 模型、回放、路由中间件的官方位置。两条契约值得抄进你的中间件：① loop 发出的请求是<strong>深冻结只读</strong>的（「其内容是会话日志的纯函数」）；② <strong>终端边界双向隔离</strong>——适配器的一切失败被转成单个 <code>finish</code> 终态 chunk（上层按错误码处理），而<strong>中间件自己的 bug 保持 throw</strong>（消费者缺陷不该被伪装成供应商故障）。另外注册表支持<strong>无缝换装</strong>（<code>replace()</code> 在一个同步段里校验+替换，任何请求都看不到空窗）与<strong>一次性 prepared call</strong>（复用或配置漂移抛 <code>INVALID_PREPARED_CALL</code>——防止把上一代配置的调用凭据发给新一代端点）。</p>
-<h3>五、防御性编程七式（官方 defensive-patterns.md 全集）</h3>
+<h3>五、防御性模式分类导航（官方 defensive-patterns/ 目录）</h3>
+<div class="alert alert-info"><span class="alert-title">📘 v0.2.1 结构变化：原来的单文件 <code>docs/defensive-patterns.md</code> 拆成了 <strong><code>docs/defensive-patterns/</code> 目录</strong>，按主题分五类共 46 条规则——general 15、client-components 13、conversation-and-session 8、package-surface 7、remote-and-api 3（各配中英双语）。下表是本教材先前提炼的「七式」，全部仍可在 <code>general.zh.md</code> 找到（个别措辞微调）；照旧值得背下来，读完表再按你的场景翻对应分类。</span></div>
 <table>
 <thead>
 <tr>
 <th>#</th>
-<th>模式</th>
+<th>模式（general 分类）</th>
 <th>一句话要义</th>
 </tr>
 </thead>
@@ -2246,7 +2252,7 @@ DENIAL_SIGNATURES = {             // 每个后端有自己的「拒绝方言」�
 </tr>
 <tr>
 <td>2</td>
-<td>公共契约两侧都遵守</td>
+<td>公共约定两侧都要遵守（原「公共契约两侧都遵守」）</td>
 <td>适配器内部爱怎么抛就怎么抛，越过公共 API 时必须归一成契约形态</td>
 </tr>
 <tr>
@@ -2299,7 +2305,7 @@ DENIAL_SIGNATURES = {             // 每个后端有自己的「拒绝方言」�
 <h3>原则一：微内核——「每个功能都是扩展点上的一条监听」</h3>
 <p>官方 cookbook 里有句可验证的宣言（<code>docs/cookbook/extension-cookbook.md:100</code>）：<strong>“Every product feature maps to a listener on a documented extension point… No row modifies the loop.”</strong>（每个产品功能都对应文档化扩展点上的一条监听；没有任何清单行修改循环本身。）这不是口号——第 1 章你见过 sdk-minimal 的 32 行清单组装出完整 agent，第 2 章见过循环自己也是清单里的一行。<strong>判定你的框架是否微内核的试金石：能不能在不改核心代码的前提下，替换掉你最引以为傲的那个组件？</strong>dsh 的答案是连主循环都能换。</p>
 <h3>原则二：接缝（Seam）——一个能力 = 定义 + 提供者 + 消费者</h3>
-<p>docs/architecture.md:133（逐字）</p>
+<p>docs/architecture.md:132–134（逐字；v0.2.1 在段末追加了一句 subagent providers 的扩展）</p>
 <pre><code>A seam is a swappable capability with three roles: a Service Definition
 declaring the interface, a Service Provider implementing it, and a Consumer
 using it, commonly a model-facing tool. A package may combine roles, but one
@@ -2351,7 +2357,7 @@ sandbox moves Bash, PTY, and LSP with them, with no provider forks.
 <tr>
 <td><strong>Service Definition</strong></td>
 <td><code>packages/ptc-runtime/ptc-runtime</code></td>
-<td>抽象类 <strong><code>PtcRuntime</code></strong>（<code>src/index.ts:104–151</code>，全文件 153 行），声明合并到 <strong><code>ctx.ptcRuntime</code></strong>；两个自描述抽象字段 <code>language</code>（'typescript' | 'python'）、<code>isolation</code>（'worker-thread' | 'process' | 'container'——「供部署区分后端用的描述符，不是安全声明」）；<strong>两个抽象方法：<code>resolve(request)</code> 解析预算与权限 → <code>run(spec)</code> 执行</strong>。<strong>模块头注释原话：Runtimes 对工具与会话一无所知，那些是消费者的事</strong>——接缝边界画得干干净净。</td>
+<td>抽象类 <strong><code>PtcRuntime</code></strong>（<code>src/index.ts:104–164</code>，全文件 165 行），声明合并到 <strong><code>ctx.ptcRuntime</code></strong>；两个自描述抽象字段 <code>language</code>（'typescript' | 'python'）、<code>isolation</code>（'worker-thread' | 'process' | 'container'——「供部署区分后端用的描述符，不是安全声明」）；<strong>两个抽象方法：<code>resolve(request)</code> 解析预算与权限 → <code>run(spec)</code> 执行</strong>。v0.2.1 起类上还多了一组可覆盖的具体成员（<code>programFormat</code>、<code>sandboxMode</code>、<code>timeout</code>、<code>executionInstructions</code>、<code>release(owner)</code>）——运行时可以声明自己的程序格式、沙箱档位与指令渲染，全文件增至 165 行。<strong>模块头注释原话：Runtimes 对工具与会话一无所知，那些是消费者的事</strong>——接缝边界画得干干净净。</td>
 </tr>
 <tr>
 <td><strong>Service Provider</strong></td>
@@ -2377,7 +2383,7 @@ sandbox moves Bash, PTY, and LSP with them, with no provider forks.
 <div class="alert alert-info"><span class="alert-title">📘 落地清单：设计一条新接缝的五个问题</span><p>① 能力的一个「调用」长什么样（进出的类型）？② 消费者是谁、模型会不会直接面对它？③ 提供者之间会怎么分化（本地/远程？TS/Python？）——分化轴就是 <code>isolation</code>/<code>language</code> 这类自描述字段；④ 提供者失败时消费者的 fail-closed 行为是什么？⑤ 哪些细节故意留在提供者里不进接口（ptc-runtime 不知道工具与会话）？——答不出第 ③ 问的接缝，通常会在第二个提供者出现时被迫破坏接口。</p>
 </div>
 <div class="alert alert-practice"><span class="alert-title">🛠 实操 E2：把骨架真的立起来</span><ol>
-<li>按清单在 <code>packages/&lt;你的组&gt;/&lt;你的包&gt;/</code> 抄出骨架，写一个最小的函数插件（name/inject/apply），在 <code>tsconfig.host.json</code> 注册，然后跑 <code>pnpm run constraints &amp;&amp; pnpm run typecheck</code>——体会「元数据铁律是机器管的」。 2. 故意犯一个错（比如删掉 cordis 的 peerDependencies），再跑 constraints——记住报错的样子，以后一眼就能认。 3. 通读 <code>packages/ptc-runtime/ptc-runtime/src/index.ts</code> 全文（<strong>153 行</strong>），对照本章第一节的表逐行打勾——这是你第一个「以接缝作者视角」读完的文件。</li>
+<li>按清单在 <code>packages/&lt;你的组&gt;/&lt;你的包&gt;/</code> 抄出骨架，写一个最小的函数插件（name/inject/apply），在 <code>tsconfig.host.json</code> 注册，然后跑 <code>pnpm run constraints &amp;&amp; pnpm run typecheck</code>——体会「元数据铁律是机器管的」。 2. 故意犯一个错（比如删掉 cordis 的 peerDependencies），再跑 constraints——记住报错的样子，以后一眼就能认。 3. 通读 <code>packages/ptc-runtime/ptc-runtime/src/index.ts</code> 全文（<strong>165 行</strong>），对照本章第一节的表逐行打勾——这是你第一个「以接缝作者视角」读完的文件。</li>
 </ol>
 </div>
 <h3>自测</h3>
@@ -2393,7 +2399,7 @@ sandbox moves Bash, PTY, and LSP with them, with no provider forks.
 <div class="alert alert-goals"><span class="alert-title">🎯 本章目标</span><p>插件注册工具/提示词只是「往框架里加东西」；本章讲的是<strong>换掉框架的地基层</strong>：给会话日志新增事件词汇、实现自己的持久化后端、乃至实现自己的 Agent 循环。这三件事对应官方留好的三个精确入口。</p>
 </div>
 <h3>一、新增会话事件类型：声明合并（扩展 SessionEventMap）</h3>
-<p>第 6 章的不变式「模型可见 ⟺ 已记录」的推论是：<strong>想给模型一种新输入，就得给日志一种新事件</strong>。官方模式（照抄 compaction 包的写法，compaction/src/types.ts:17–23）：</p>
+<p>第 6 章的不变式「模型可见 ⟺ 已记录」的推论是：<strong>想给模型一种新输入，就得给日志一种新事件</strong>。官方模式（照抄 compaction 包的写法，packages/compaction/compaction/src/types.ts:17–23）：</p>
 <pre><code>// 你的包里 src/types.ts —— 注意合并进的是 '/types' 子路径导出
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
@@ -2403,9 +2409,9 @@ declare module '@deepseek-ai/dsh-session/types' {
 </code></pre>
 <p>四条硬规则（docs/subsystems/session.md）：① <strong>插件事件只能是 log-only</strong>——表面事件的闭集（<code>user/message / assistant/message / tool/result</code>）不对插件开放，你没有 <code>surfaceOp</code> 可填，也就不会进入模型历史；② <code>event.data</code> 必须可 JSON 序列化——「携带不可序列化数据的事件类型，等于对磁盘格式的破坏性变更」；③ <strong>switch SessionEvent 时禁止 assertNever</strong>——插件随时可能合并进新变体，必须留 default 兜底；④ 一族相关事件要携带同一稳定业务 id（Web 渲染成同一节点的条件）。所有核心与合并的事件都会进生成式的 <code>docs/persistence-catalog.md</code> 目录。</p>
 <h3>二、自己的持久化后端：SessionPersistence 的五方法契约</h3>
-<div class="alert alert-warn"><span class="alert-title">⚠️ v0.1.7-rc.2：持久化已独立成包组</span><p>会话持久化已从 <code>packages/core/session/</code> 移到独立的 <strong><code>packages/session/session-persistence/</code></strong>（相关实现包也在 <code>packages/session/</code> 组下）。抽象类现在位于 <code>session-persistence/src/index.ts:135</code> 附近。</p>
+<div class="alert alert-warn"><span class="alert-title">⚠️ v0.1.7-rc.2：持久化已独立成包组</span><p>会话持久化已从 <code>packages/core/session/</code> 移到独立的 <strong><code>packages/session/session-persistence/</code></strong>（相关实现包也在 <code>packages/session/</code> 组下）。抽象类现在位于 <code>session-persistence/src/index.ts:137–205</code>。</p>
 </div>
-<p>接口是抽象类 <code>SessionPersistence extends Service</code>（session-persistence/src/index.ts:135–198 附近），<strong>五个方法全部是抽象的</strong>：<code>create(header) → SessionHandle</code>（同 id 已存在要抛错）、<code>open(id, 'read' | 'write')</code>（<strong>write 原子性地领取单写者所有权</strong>）、<code>stat(id)</code>、<code>list()</code>、<code>flush()</code>（全部在写句柄的持久性屏障）——不要想当然地以为某个方法是「自带默认实现」。仓库提供了一组共享助手（<code>validateStoredEvents</code>、<code>materializeAppendBatch</code>…）与类型化错误词汇（<code>SessionFormatUnsupportedError</code> / <code>SessionPersistenceCorruptionError</code> / <code>SessionOwnershipLostError</code>…），官方明说树外后端「可以实现同一服务契约」，但必须守住三条存储语义：</p>
+<p>接口是抽象类 <code>SessionPersistence extends Service</code>（session-persistence/src/index.ts:137–205，声明顺序为 create / open / flush / stat / list），<strong>五个方法全部是抽象的</strong>：<code>create(header) → SessionHandle</code>（同 id 已存在要抛错）、<code>open(id, 'read' | 'write')</code>（<strong>write 原子性地领取单写者所有权</strong>）、<code>stat(id)</code>、<code>list()</code>、<code>flush()</code>（全部在写句柄的持久性屏障）——不要想当然地以为某个方法是「自带默认实现」。v0.2.1 起该包拆成多文件：共享助手（<code>validateStoredEvents</code>、<code>materializeAppendBatch</code>…）收进 <strong><code>src/storage-contract.ts</code></strong>，类型化错误词汇（<code>SessionFormatUnsupportedError</code> / <code>SessionPersistenceCorruptionError</code> / <code>SessionOwnershipLostError</code>…）收进 <strong><code>src/errors.ts</code></strong>（index.ts 再导出）。官方明说树外后端「可以实现同一服务契约」，但必须守住三条存储语义：</p>
 <ul>
 <li>事件从 seq 0 连续、永不重写；<strong>物理撕裂的尾部绝不交给读者</strong>，由写路径在首次 append 前截断；</li>
 <li>读到不认识的事件词汇要 fail-closed 拒绝（防半新半旧版本混读）；</li>
@@ -2433,11 +2439,11 @@ declare module '@deepseek-ai/dsh-session/types' {
 <div class="alert alert-goals"><span class="alert-title">🎯 本章目标</span><p>MCP（Model Context Protocol）是外部工具生态的事实标准。dsh 用一个 <code>packages/mcp/mcp-client</code> 包把任意 MCP server 的工具桥接进 <code>ctx.tools</code>——本节讲清这座桥的四个精巧设计，然后<strong>亲手挂一个真实 MCP server</strong>。</p>
 </div>
 <h3>一、接入面：两种传输 + 一份纯配置</h3>
-<p>配置是判别联合（src/index.ts:50–95）：<code>transport: 'stdio'</code>（<code>command/args/env/cwd</code>，参数直接传递<strong>不经 shell 插值</strong>）或 <code>'streamable-http'</code>（<code>url/headers</code>）；公共字段有 <code>serverName</code>（≤32 字符，<code>[A-Za-z0-9_-]</code>）、<code>toolCallTimeoutMs</code>（默认 60s，直接作用在 MCP 请求上）、<code>failOnStartupError</code>、<code>reconnect</code>。注意安全细节：<strong>stdio 子进程的环境是清洗过的</strong>（<code>scrubbedParentEnv()</code> 剔除凭据形状的变量与过期 DSH_* 名，再并上你配置的 env）——defensive-patterns 第 6 式在这里落地。</p>
+<p>配置是判别联合（src/index.ts:49–109）：<code>transport: 'stdio'</code>（<code>command/args/env/cwd</code>，参数直接传递<strong>不经 shell 插值</strong>）或 <code>'streamable-http'</code>（<code>url/headers</code>）；公共字段有 <code>serverName</code>（≤32 字符，<code>[A-Za-z0-9_-]</code>）、<code>toolCallTimeoutMs</code>（默认 60s，直接作用在 MCP 请求上）、<code>failOnStartupError</code>、<code>reconnect</code>，v0.2.1 起两类传输都新增 <code>maxInstructionBytes</code>（默认 32 768，服务器指令的字节上限——服务器自述文本也受预算门约束）。注意安全细节：<strong>stdio 子进程的环境是清洗过的</strong>（<code>scrubbedParentEnv()</code> 现由 <code>@deepseek-ai/dsh-subprocess</code> 提供，剔除凭据形状的变量与过期 DSH_* 名，再并上你配置的 env）——defensive-patterns 的「绝不将环境变量或可预测路径暴露给不可信输出」一式在这里落地。</p>
 <h3>二、命名：与 Claude Code / Codex 同形，冲突有哈希兜底</h3>
 <p>模型看到的公共名是 <code>mcp__&lt;serverName&gt;__&lt;rawName&gt;</code>（README 原话：与 Claude Code、Codex 相同的命名形状——两个 server 都提供 <code>search</code> 时，它们以 <code>mcp__github__search</code> 与 <code>mcp__web__search</code> 共存）。两个工程细节：DeepSeek 的函数名契约是 ≤64 字符，超长/非法时追加 <strong>12 位十六进制 SHA-256 前缀哈希</strong>（对 serverName+rawName），保证不同 MCP 身份永不坍缩；<strong>原始工具名只出现在 wire 的 tools/call 上，公共名永远不被反解析</strong>——解析名字就是给注入留门。</p>
 <h3>三、同步是原子的：要么整代、要么没有</h3>
-<p><code>syncTools()</code>（tools.ts:144）两阶段：先<strong>只读拉取</strong>（排干 tools/list 分页，在注册表之外构建完整的新一代工具定义），再<strong>原子换装</strong>（注销旧代、注册新代）。若注册时发现 <code>mcp__&lt;server&gt;__</code> 命名空间被外来工具抢占，<strong>整代回滚为零</strong>——"the model sees either the full generation or none of it"。所有同步经单一 promise 链串行化。这条对任何做「外部系统镜像到内部注册表」的人都是模板：<strong>绝不暴露半代状态</strong>。</p>
+<p><code>syncTools()</code>（mcp-client/src/tools.ts:113）两阶段：先<strong>只读拉取</strong>（排干 tools/list 分页，在注册表之外构建完整的新一代工具定义），再<strong>原子换装</strong>（注销旧代、注册新代）。若注册时发现 <code>mcp__&lt;server&gt;__</code> 命名空间被外来工具抢占，<strong>整代回滚为零</strong>——"the model sees either the full generation or none of it"。所有同步经单一 promise 链串行化。这条对任何做「外部系统镜像到内部注册表」的人都是模板：<strong>绝不暴露半代状态</strong>。</p>
 <h3>四、断线重连的预算制</h3>
 <p>重连策略（connection.ts）：每次断线一个尝试预算（默认 initialDelayMs 500 → maxDelayMs 30s，maxAttempts 10），<strong>连接稳定满 30s 才重置预算</strong>；预算耗尽后注销该 server 的全部工具并停机——「从这种状态走出来的唯一方式是 disposal（含热重载）」。对照进阶 1 的重试：同样是预算制，但这里预算耗尽的结局是「优雅退出而非无限纠缠」。<strong>审批与沙箱呢？</strong>MCP 工具就是普通注册表工具：审批走通用 <code>tools/pre-execute</code> waterfall（返回 ask 时若无审批服务则 fail-closed 拒绝）；沙箱不作用于 MCP 工具本身——它们是远端进程的事，这也提醒你：<strong>挂 MCP server 前，先想想那个 server 自己的权限有多大</strong>。</p>
 <div class="alert alert-practice"><span class="alert-title">🛠 实操 E4：挂一个真实的 MCP server（10 分钟，免费）</span><ol>
@@ -2459,7 +2465,7 @@ declare module '@deepseek-ai/dsh-session/types' {
 <h3>一、PTC：从「逐个点菜」到「写一段程序」</h3>
 <p>原生函数调用模式下，模型每轮发一批 tool_call，框架逐个执行再回填——中间的往返轮次与「把全部工具 schema 常驻上下文」是两笔隐形开销。PTC 的思路：<strong>只给模型一个 <code>run_code</code> 工具 + 一份生成的 SDK 文档，让模型写 TypeScript（或 Python）程序，在程序里 <code>await tools.read_file({...})</code> 自由组合</strong>。dsh 的实现要点（全部已验证）：</p>
 <ul>
-<li><strong>模式在呈现层切换</strong>：<code>ToolPresentationMode = 'native' | 'ptc' | 'both'</code>——ptc 模式只发 run_code + 生成 SDK，并把原生工具清单<strong>折叠</strong>（collapse）出上下文；配置选了 ptc 但部署没挂 codeRuntime，<strong>挂载时即失败而非第一次提问时</strong>（又是 fail-loud）。</li>
+<li><strong>模式在呈现层切换</strong>：<code>ToolPresentationMode = 'native' | 'ptc'</code>（v0.2.1 删除了 <code>'both'</code> 混合呈现，<code>DSH_TOOLS_MODE</code> 环境变量一并退役，改由配置/插件级声明）——ptc 模式只发 run_code + 生成 SDK，并把原生工具清单<strong>折叠</strong>（collapse）出上下文；配置选了 ptc 但部署没挂 codeRuntime，<strong>挂载时即失败而非第一次提问时</strong>（又是 fail-loud）。</li>
 <li><strong>SDK 是同一注册表的第二个投影</strong>：ts-types.ts 头注释——「schemas()（原生函数调用）与本模块（生成的 <code>declare const tools</code> API）是同一存储的两个投影」。Python 版（py-types.ts，818 行）连教程语气都备好了：TypedDict 只是静态桩，参数请用普通 dict。</li>
 <li><strong>程序里的每次 tools.xxx() 不是绕过管制</strong>：它作为<strong>嵌套调用走完整的原生并发契约</strong>（并行/独占分类、上限、按模型序提交），子调用 id 形如 <strong><code>${callId}:ptc:${n}</code></strong>（v0.1.7 起由旧的 <code>:code:</code> 前缀改名），并落 <strong><code>tool/ptc-dispatch</code></strong>（开始时为 <code>tool/ptc-dispatch-start</code>）日志事件——PTC 改变的是调用形态，不是权限面。</li>
 <li><strong>执行预算诚实且可杀</strong>：worker 线程隔离（空环境、512MB 堆、按事件循环利用率实测的 60s 计算预算、600s 墙钟、同步死循环可强杀）——但模块文档坚持标注 "containment, not a security boundary"。Python 后端（experimental，CPython 子进程 + fd-3 JSON 行协议）同规则。</li>
@@ -2671,8 +2677,8 @@ declare module '@deepseek-ai/dsh-session/types' {
 <td>进 4</td>
 </tr>
 <tr>
-<td><code>docs/defensive-patterns.md · docs/postmortem/ · docs/config-catalog.md</code></td>
-<td>防御性编程七式、官方事故复盘、生成式配置参考</td>
+<td><code>docs/defensive-patterns/（五分类 46 条） · docs/postmortem/ · docs/config-catalog.md</code></td>
+<td>防御性模式分类导航、官方事故复盘、生成式配置参考</td>
 <td>进 4 / 5</td>
 </tr>
 <tr>
@@ -2733,7 +2739,7 @@ declare module '@deepseek-ai/dsh-session/types' {
 <li>官方介绍：<a href="https://www.deepseek.com/harness/en/">deepseek.com/harness</a></li>
 <li>架构总览：<code>docs/architecture.zh.md</code>（本教材多处引用其 Turn-flow 与「Where new behavior goes」表）</li>
 <li>Cordis 入门：<code>docs/cordis-primer.zh.md</code> → <code>docs/cordis-tutorial/01~07</code></li>
-<li>进阶必读：<code>docs/defensive-patterns.md</code>（防御性编程七式）、<code>docs/postmortem/</code>（四篇官方事故复盘）、<code>docs/tool-execution-pipeline.md</code>、<code>docs/subsystems/</code> 下与你落地相关的子系统篇</li>
+<li>进阶必读：<code>docs/defensive-patterns/</code>（五分类 46 条防御性模式，从 <code>general.zh.md</code> 读起）、<code>docs/postmortem/</code>（四篇官方事故复盘）、<code>docs/tool-execution-pipeline.md</code>、<code>docs/subsystems/</code> 下与你落地相关的子系统篇</li>
 <li>高级必读：<code>docs/capability-seams.md</code>（接缝图谱）、<code>docs/event-producer-consumer.md</code>（事件矩阵）、<code>docs/cookbook/adding-a-package.md</code> + <code>docs/cookbook/extension-cookbook.md</code>（扩展的官方手册）、<code>docs/persistence-catalog.md</code>（全部可持久化事件目录）</li>
 </ul>
 <div class="alert alert-tip"><span class="alert-title">🎓 写在最后</span><p>回到全书开头那句话：<strong>Agent = Model + Harness</strong>。走完十章你应该已经体会到：模型的能力每家都越来越强、越来越像，而<strong>产品之间的差距，恰恰长在 harness 里</strong>——怎么记日志、怎么调度工具、怎么省上下文、怎么把一切做成可替换的插件。这十 章教你的是「读懂一个伟大 harness」的方法；接下来，去写你自己的。</p>
