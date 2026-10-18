@@ -26,7 +26,7 @@ GitHub：deepseek-ai/deepseek-harness 适用版本：dsh v0.2.1-rc.2 对应源�
 | **minimal**（极简模式） | Minimal mode | 极简编码代理，核心是一个**持久终端工具**（Windows 下为 PowerShell 持久化终端，其余平台为 bash），用于最小环境下的基准评测与能力对比；v0.2.1 起另挂载**只读的图像输入**（可读图、不可读写文件）与**上下文压缩**（自动 + 手动命令）。注意：**该模式不挂载 `agent-instructions` 插件，AGENTS.md 不注入**。 |
 | **cordis**（创造模式） | Creator mode | 用对话定制 DSH：编写插件以添加功能或界面，或组合工具与提示词创建自己的模式；含运行时检视与预设编写引导。 |
 
-这四个 preset 均以 `@deepseek-ai/dsh-agent-preset` 插件行的形式注入，按 `order` 排序由 `packages/preset/agent-preset-registry` 展示；v0.2.1 起四个 preset 都挂载了 `time-context`（时间上下文）与 `tool-schedule`（定时任务工具）。Web UI 的 Agent presets 设置页可切换「设为新任务默认」。
+这四个 preset 均以 `@deepseek-ai/dsh-agent-preset` 插件行的形式注入，按 `order` 排序由 `packages/preset/agent-preset-registry` 展示；v0.2.1 起 standard / ptc / cordis 三个 preset 挂载了 `time-context`（时间上下文）与 `tool-schedule`（定时任务工具；minimal 极简模式不挂）。Web UI 的 Agent presets 设置页可切换「设为新任务默认」。
 
 ### 全程可追溯的会话日志
 

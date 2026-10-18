@@ -163,7 +163,7 @@ details[open] > summary { margin-bottom: .5em; padding-bottom: .4em; border-bott
 </tr>
 </tbody>
 </table>
-<p>这四个 preset 均以 <code>@deepseek-ai/dsh-agent-preset</code> 插件行的形式注入，按 <code>order</code> 排序由 <code>packages/preset/agent-preset-registry</code> 展示；v0.2.1 起四个 preset 都挂载了 <code>time-context</code>（时间上下文）与 <code>tool-schedule</code>（定时任务工具）。Web UI 的 Agent presets 设置页可切换「设为新任务默认」。</p>
+<p>这四个 preset 均以 <code>@deepseek-ai/dsh-agent-preset</code> 插件行的形式注入，按 <code>order</code> 排序由 <code>packages/preset/agent-preset-registry</code> 展示；v0.2.1 起 standard / ptc / cordis 三个 preset 挂载了 <code>time-context</code>（时间上下文）与 <code>tool-schedule</code>（定时任务工具；minimal 极简模式不挂）。Web UI 的 Agent presets 设置页可切换「设为新任务默认」。</p>
 <h3>全程可追溯的会话日志</h3>
 <p>模型看到的一切都被记录在一条<strong>只追加（append-only）的会话日志</strong>里：系统提示词、推理、工具调用与结果、子代理调度、上下文注入等。Web UI 中的 Trajectory 视图可以按来源检查每条记录；<strong>续跑（Resume）、分叉（Fork）、搜索、回放（Replay）都作用于同一条事件流</strong>。这既是调试利器，也意味着“模型可见 ⟺ 已落日志”。</p>
 <div class="alert alert-warn"><span class="alert-title">⚠️ 开发者预览阶段</span><p>项目处于 Developer Preview，官方明确说明<strong>会有破坏性兼容变更</strong>；运行前请阅读仓库中的 <code>SAFETY.md</code> 安全须知。本手册基于官方 master 分支 <strong>v0.2.1-rc.2</strong>（commit <code>687f282e</code>，2026-10-17）的文档整理，个别细节请以官方文档为准。</p>
