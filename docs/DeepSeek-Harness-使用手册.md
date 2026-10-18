@@ -115,7 +115,7 @@ Harness Home 解析规则：`$DSH_HOME`，未设置则为 `~/.dsh`。典型的�
 
 > 版本提示：早期版本的用户设置写在 `$DSH_HOME/settings.yaml`，现**已废弃**——设置统一落在当前 profile 的 `cordis.patch.yml`。Settings 服务在启动时会把 harness home 里遗留的 `settings.yaml` **先改名为 `settings.yaml.imported`，再**从改名后的文件逐 section 导入为同名条目（先改名保证「部分导入」绝不重放）。
 
-相关环境变量：`DSH_HOME`、`DSH_AGENTS_HOME`（默认 `~/.agents`）、`DSH_BUNDLED_SKILL_DIR`、`DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL`。启动行为相关的还有：`DSH_PERMISSION_MODE`（默认 `workspace-write`；设为 `danger-full-access` 时审批策略同步放宽为 `never`）、`DSH_TELEMETRY_MODE`（默认 `FEEDBACK_ONLY`）、`DSH_TELEMETRY_DISABLED`（取任何非空值即退出遥测）。旧版的 `DSH_TOOLS_MODE` 已在 v0.2.1 退役（工具呈现改为配置/插件级声明，只剩 `native` / `ptc` 两档）。
+相关环境变量：`DSH_HOME`、`DSH_AGENTS_HOME`（默认 `~/.agents`）、`DSH_BUNDLED_SKILL_DIR`、`DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL`。启动行为相关的还有：`DSH_PERMISSION_MODE`（默认 `workspace-write`；设为 `danger-full-access` 时审批策略同步放宽为 `never`）、`DSH_TELEMETRY_MODE`（默认 `FEEDBACK_ONLY`）、`DSH_TELEMETRY_DISABLED`（取任何非空值即退出遥测）。工具呈现形态现在是 `tools` 条目的 `mode` 配置，v0.2.1 删除了混合档 `both`（只剩 `native` / `ptc`）。环境变量 `DSH_TOOLS_MODE`（取值 `native` / `ptc`）**没有退役**，但降级为**临时**的进程级开关：Web 与 headless 两个 bundle 直接以它喂 `mode`（源码注释原话 “TEMPORARY workaround … opts a whole dsh process into PTC mode”，待按会话选择工具呈现的机制上线后移除）；且因 `DSH_*` 前缀只能来自启动环境（写进 `.env` 会被拒），它天然只能进程级设置。
 
 > [!WARN] ⚠️ `.env` 不是什么都能写的
 > 环境变量分三层合成：**进程环境 > 调用目录 `.env` > `$DSH_HOME/.env`**。但有一份「启动专属名单」（`PATH`、`HOME`、`NODE_OPTIONS`、`NODE_TLS_REJECT_UNAUTHORIZED`、`DEEPSEEK_BASE_URL` 等及 `DSH_*`、`XDG_*`、`DYLD_*`、`BASH_FUNC_*` 前缀）**只能来自最外层启动环境**——v0.2.1 起，`.env` 里出现名单命中项会**直接抛错拒绝启动**（不再静默忽略）；唯一例外是代理类变量（`HTTP(S)_PROXY` / `ALL_PROXY` / `NO_PROXY`）允许写在 `$DSH_HOME/.env`。普通业务变量（如自定义 Provider 的 `apiKeyEnv` 引用的 key）仍可写进两层 `.env`。
