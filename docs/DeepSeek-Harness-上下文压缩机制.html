@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DeepSeek-Harness 上下文压缩机制（Compaction）解析</title>
+<style>:root{
+  --ink:#1f2328; --ink-2:#57606a; --ink-3:#8b93a1;
+  --line:#e5e8ee; --line-2:#d8dee4;
+  --bg:#f7f8fa; --paper:#ffffff;
+  --code-bg:#f6f8fa;
+  --brand:#4f46e5; --brand-soft:#eef2ff;
+}
+*{box-sizing:border-box}
+body {
+  font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC",
+    "Hiragino Sans GB", sans-serif;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 40px 24px 96px;
+  line-height: 1.78;
+  color: var(--ink);
+  font-size: 16px;
+  background: var(--bg);
+}
+#page {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 40px 48px 56px;
+  box-shadow: 0 1px 2px rgba(16,24,40,.04);
+}
+h1, h2 { border-bottom: 1px solid var(--line-2); padding-bottom: 8px; }
+h1 { font-size: 1.9em; margin: 0 0 .8em; line-height:1.35; }
+h2 { font-size: 1.4em; margin-top: 2.2em; }
+h3 { font-size: 1.15em; margin-top: 1.7em; }
+h4 { font-size: 1.02em; margin-top: 1.5em; color: var(--ink-2); }
+a { color: #0969da; text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+  font-family: Consolas, "JetBrains Mono", "Cascadia Code", monospace;
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 5px;
+  font-size: .88em;
+}
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  line-height: 1.55;
+}
+pre code { background: none; border: none; padding: 0; font-size: .85em; }
+blockquote {
+  border-left: 4px solid var(--line-2);
+  color: var(--ink-2);
+  margin: 1em 0;
+  padding: .2em 1em;
+}
+table { border-collapse: collapse; margin: 1em 0; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line-2); padding: 7px 14px; vertical-align: top; }
+th { background: var(--code-bg); text-align: left; }
+tr:nth-child(even) td { background: #fbfcfd; }
+hr { border: none; border-top: 1px solid var(--line-2); margin: 2.4em 0; }
+li > p { margin: .3em 0; }
+ol, ul { padding-left: 1.6em; }
+
+/* ── GitHub 风格提示块 ───────────────────────────────── */
+.alert {
+  border: 1px solid var(--line-2);
+  border-left: 4px solid var(--ink-3);
+  border-radius: 8px;
+  background: var(--paper);
+  padding: 12px 18px;
+  margin: 1.3em 0;
+}
+.alert > .alert-title {
+  display: block;
+  font-weight: 700;
+  margin-bottom: .3em;
+  color: var(--ink);
+}
+.alert > p { margin: .35em 0; }
+.alert > p:last-child { margin-bottom: 0; }
+.alert > :first-child { margin-top: 0; }
+.alert-note    { border-left-color: #4f46e5; background: #f5f6ff; }
+.alert-tip     { border-left-color: #1a7f37; background: #f2fbf5; }
+.alert-warn    { border-left-color: #9a6700; background: #fffbf0; }
+.alert-danger  { border-left-color: #cf222e; background: #fff5f5; }
+.alert-info    { border-left-color: #0969da; background: #f2f7fd; }
+.alert-goals   { border-left-color: #8250df; background: #f8f4ff; }
+.alert-practice{ border-left-color: #0f766e; background: #f1faf8; }
+
+/* ── 折叠块 ──────────────────────────────────────────── */
+details {
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: #fcfcfd;
+  padding: 10px 16px;
+  margin: 1.2em 0;
+}
+details[open] { background: var(--paper); }
+summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--brand);
+  padding: 2px 0;
+}
+summary:hover { color: #3730a3; }
+details[open] > summary { margin-bottom: .5em; padding-bottom: .4em; border-bottom: 1px dashed var(--line); }
+
+@media (max-width: 640px) {
+  body { padding: 16px 10px 60px; }
+  #page { padding: 22px 18px 32px; border-radius: 10px; }
+}</style>
+</head>
+<body>
+<div id="page">
+<h1>DeepSeek-Harness 上下文压缩机制（Compaction）解析</h1>
+<div class="alert alert-note">
+<p>本文基于 <strong>DSH v0.2.1-rc.2</strong>（tag <code>dsh-v0.2.1-rc.2</code>，commit <code>687f282e86</code>）的源码写成，所有 <code>文件:行号</code> 引用均以该版本为准，后续版本可能漂移。核实内容时请以源码为准。</p>
+</div>
+<p>上下文压缩（compaction）是 DSH 在会话变长时保住上下文窗口的核心机制：把较早的对话区段用一次 LLM 总结替换成单个"检查点"消息，从而为后续请求腾出空间。它不是一个函数，而是一套由<strong>触发策略、日志事务、前缀重放总结、表面替换</strong>组成的完整子系统，散布在约 5 个包里：</p>
+<table>
+<thead>
+<tr>
+<th>包</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>packages/compaction/compaction</code></td>
+<td>抽象服务定义：<code>CompactionEngine</code> 基类、错误分类、工具配对平衡、检查点消息源</td>
+</tr>
+<tr>
+<td><code>packages/compaction/compaction-basic</code></td>
+<td>默认实现：触发策略、范围选择、总结事务、LLM 总结器</td>
+</tr>
+<tr>
+<td><code>packages/compaction/compaction-tool-result-pruner</code></td>
+<td>免模型的工具结果截断（压前预清理）</td>
+</tr>
+<tr>
+<td><code>packages/compaction/compaction-image-offload</code></td>
+<td>图片预算超限时的旁路恢复</td>
+</tr>
+<tr>
+<td><code>packages/compaction/command-compact</code></td>
+<td>人工 <code>/compact</code> 命令</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>1. 前提：会话的双层模型</h2>
+<p>理解压缩先要理解 DSH 会话的存储模型（<code>packages/core/session/src/surface.ts</code>）：</p>
+<ul>
+<li><strong>日志（log）</strong>：append-only 的事件序列，是唯一事实源。任何东西——包括压缩——都<strong>不删除</strong>已写入的事件。</li>
+<li><strong>表面（surface）</strong>：叠在日志上的有序视图，只收录会产生 LLM 消息的五类事件：<code>system/message</code>、<code>developer/message</code>、<code>user/message</code>、<code>assistant/message</code>、<code>tool/result</code>（surface.ts:50-56）。发给模型的请求消息由 <code>deriveMessages()</code> 从当前表面派生。</li>
+</ul>
+<p>表面节点带 <code>surfaceOp</code> 标记，区分两种来源（surface.ts:78-106）：</p>
+<ul>
+<li><strong>append</strong>：在自己日志位置进入表面的原始事件——这是人类转录的事实材料；</li>
+<li><strong>replace</strong>：替换了某个已有区间的"替代副本"（替代品只在模型视图中可见，被替换的原始事件仍留在日志里）。</li>
+</ul>
+<p>压缩的全部魔法就建立在这一点上：<strong>改写模型看到的视图，同时原样保留历史</strong>。</p>
+<hr />
+<h2>2. 三个触发入口</h2>
+<p>压缩有三个触发时机，前两个自动、一个手动，全部汇聚到同一个事务实现。</p>
+<h3>2.1 步前压力触发（主路径，自动）</h3>
+<p><code>compaction-basic</code> 在 <code>agent/pre-step</code> 事件上挂钩子（<code>compaction-basic/src/index.ts:158</code>）。该事件在 agent 主循环<strong>每个 step 发出模型请求之前</strong>触发（<code>packages/core/agent-loop/src/agent.ts:267</code> 的 <code>preStep()</code>），因此恢复会话后的第一个 step 同样会被检查。</p>
+<p>每次检查的流程（<code>compactIfNeeded(agent, 'pressure', signal)</code>，index.ts:269）：</p>
+<ol>
+<li>按会话最近路由的 provider/model 解析策略覆盖（<code>resolveTargetPolicy</code>）；</li>
+<li><code>ctx.llm.resolveModelInfo</code> 取该模型的 <code>contextWindow</code>；缺失则抛 <code>TargetPressureConfigError</code>（每个目标只告警一次，不阻塞回合，index.ts:167-170）；</li>
+<li>计算阈值（见 2.4），用 <code>ctx.tokenMeter</code> 估算当前表面总 token；</li>
+<li><code>totalTokens &lt; thresholdTokens</code> → 返回 null，什么都不做；</li>
+<li>达标 → 先跑免模型的工具结果修剪（若装了 <code>toolResultPruner</code>，index.ts:323-326），重新计量后仍超标才进入总结压缩；</li>
+<li>压缩后若仍超标，最多再重试 <code>compactionRetries</code>（默认 1）次；仍失败则抛错——但错误被钩子捕获后只告警并放行回合（"step compaction failed; continuing the turn"），<strong>压缩失败不阻塞对话</strong>。</li>
+</ol>
+<h3>2.2 溢出兜底恢复（自动）</h3>
+<p><code>agent/request-error</code> 钩子（index.ts:190）：当请求以 <code>CONTEXT_WINDOW_EXCEEDED</code> 失败时（估算偏差导致没提前压住的情形），<strong>绕过阈值</strong>强制压缩一次，然后返回 <code>{ kind: 'retry' }</code> 让当前 step 重发。</p>
+<p>细节：</p>
+<ul>
+<li>每个 agent 有重试计数，受 <code>maxOverflowRetries</code>（默认 1）限制；收到成功的 <code>assistant/message</code> 或 agent 转入 idle 时清零（index.ts:178-188）；</li>
+<li>溢出路径选区时 <code>retainTokens</code> 传 <strong>0</strong>（index.ts:299）——既然 provider 已确认超限，就不再保尾部预算，压一次"有用的平衡缩减"；</li>
+<li>部分成功也算数：若压缩过程抛错，但表面 <code>replaceGeneration</code> 已前进（说明免模型修剪已持久落地），仍然重试（index.ts:212-218）。</li>
+</ul>
+<h3>2.3 手动 <code>/compact</code> 命令</h3>
+<p><code>command-compact</code> 包提供无参数的 <code>/compact</code>，调用 <code>compactNow()</code>（index.ts:383）：</p>
+<ul>
+<li>要求 agent <strong>空闲</strong>：通过 <code>agent.runMaintenance()</code> 执行，agent 不空闲时同步抛 <code>busy</code>；</li>
+<li>不受阈值限制：选区时 <code>retainTokens</code> 传 0，尽量压缩整个可安全替换的区段；</li>
+<li>以"独立括号"执行（<code>owner: null</code>，不依附于打开的 turn），稳定性要求也更宽松（见 3.6）；</li>
+<li>成功关闭括号后强制 flush 会话到磁盘（<code>ctx.sessions.flush</code>，index.ts:410-412）。</li>
+</ul>
+<p>自动压缩由配置项 <code>auto</code>（默认 <code>true</code>）总开关控制（index.ts:140）。</p>
+<h3>2.4 阈值与预算公式</h3>
+<p>默认值定义在 <code>compaction-basic/src/config.ts</code>：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>默认值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>thresholdRatio</code></td>
+<td>0.8（:20）</td>
+<td>上下文窗口的压力比例</td>
+</tr>
+<tr>
+<td><code>headroomTokens</code></td>
+<td>65536（:75）</td>
+<td>给压缩工作本身预留的空间</td>
+</tr>
+<tr>
+<td><code>retainRatio</code></td>
+<td>0.16（:23）</td>
+<td>尾部原样保留比例（按消息预算）</td>
+</tr>
+<tr>
+<td><code>compactionRetries</code></td>
+<td>1（:105）</td>
+<td>压力路径的压缩重试次数</td>
+</tr>
+<tr>
+<td><code>maxOverflowRetries</code></td>
+<td>1（:106）</td>
+<td>溢出路径的恢复重试次数</td>
+</tr>
+<tr>
+<td><code>auto</code></td>
+<td>true（:108）</td>
+<td>自动压缩总开关</td>
+</tr>
+</tbody>
+</table>
+<p>阈值推导（<code>resolveCompactSpec</code>，config.ts:153-217）：</p>
+<pre><code class="language-text">reservedCompletion = 请求配置的 maxTokens ?? 适配器默认 maxTokens ?? 0   // (index.ts:65-68)
+messageBudget     = contextWindow − reservedCompletion                  // (config.ts:172)
+pressureBudget    = messageBudget − headroomTokens                      // (config.ts:181)
+thresholdTokens   = ⌊min(contextWindow × thresholdRatio, pressureBudget)⌋  // (config.ts:191)
+retainTokens      = 显式 retainTokens ?? ⌊messageBudget × retainRatio⌋   // (config.ts:195)
+约束               : retainTokens &lt; thresholdTokens（config.ts:198，装载期即校验）
+</code></pre>
+<p>即触发线取"窗口的 80%"与"扣除输出预留和压缩余量后的余额"两者中较小者。所有策略字段都可用 <code>modelPolicies</code> 按 <code>provider + model</code> 精确覆盖。</p>
+<hr />
+<h2>3. 压缩事务：一次完整生命周期</h2>
+<p>核心入口是 <code>compactSurfaceRegion</code>（<code>compaction-basic/src/region.ts:173</code>）。它是一个<strong>日志事务</strong>：要么完整落地一组事件，要么留下可追溯的失败记录。</p>
+<pre><code class="language-text">选区 selectCompactableRange
+ │  只读：尾部预算 + system 头保护 + 工具配对平衡
+ ▼
+入口校验 + 压缩锁检查（未配对的 compaction/start 即 busy）
+ ▼
+写 compaction/start ◄──── 这就是持久锁
+ ▼
+prepareCompaction：区间定价快照 + 重建重放输入
+ ▼
+summarize：LLM 总结（失败可经 waterfall 恢复后重试）
+ ▼
+稳定性检查（自动=整个表面未变；手动=选中区间未变）
+ ▼
+收缩检查：摘要代价必须严格小于被替换区间
+ ▼
+提交：compaction/summary → user/message(replace) → compaction/end
+ ▼
+（可选）flush 持久化
+</code></pre>
+<h3>3.1 选区（region.ts:117-155）</h3>
+<ul>
+<li>从表面节点<strong>尾部向前</strong>累加 token，凑够 <code>retainTokens</code> 为止——这段是原样保留的尾部（:135-140）；</li>
+<li>区间起点跳过节点 0 的 <code>system/message</code>（:131），系统提示永不进入压缩区；</li>
+<li>边界用工具配对平衡校正（见 3.2）；</li>
+<li>剩余可压区间为空（<code>keepFromIdx &lt;= firstIdx</code>）→ 返回 null。</li>
+</ul>
+<p>注意区间永远从<strong>最老的消息</strong>开始——这个性质是第 4 章缓存命中设计的根基。</p>
+<h3>3.2 工具配对平衡（<code>packages/compaction/compaction/src/tool-pairing.ts</code>）</h3>
+<p>切割线绝不允许切开一对 assistant 工具调用与其 <code>tool/result</code>，否则派生出的消息序列是非法的。实现是按表面顺序折叠"未应答 tool-call 计数"（<code>assistant/message</code> 中每个 tool-call 块 +1，<code>tool/result</code> −1，:29-38），得到每个切割点的平衡表；平衡表按表面代数（<code>replaceGeneration</code>）缓存、增量扩展（:72-92）。<code>toolPairingBalancedBefore/After</code> 供两端边界检查；选区时若尾部预算切在配对中间，起界自动向前退到平衡位置（region.ts:143-147）。</p>
+<h3>3.3 压缩锁（region.ts:308-334、566-600）</h3>
+<p>入口时反向扫描日志找最近的 <code>compaction/start</code> / <code>compaction/end</code>：存在未配对的 <code>start</code> 即认为压缩进行中，拒绝新尝试（<code>busy</code>）。<code>compaction/start</code> 事件一旦写入就是锁，直到某次 <code>compaction/end</code>（成功或失败）关闭。唯一的豁免：若其后存在更新的 <code>session/end-seed</code> 边界（会话被构造子重播种），说明那个悬挂的锁属于更早的会话生命周期，不再挡路（:302-320）。</p>
+<h3>3.4 快照与重放输入（region.ts:361-384、544-563）</h3>
+<p><code>prepareCompaction</code> 对选中区间做 token 定价快照（后面所有比较都以它为准），并构建总结输入：</p>
+<ul>
+<li><strong>system prompt</strong>：取表面节点 0 的 <code>system/message</code> 派生结果（无则不加）；</li>
+<li><strong>tools</strong>：取 <code>session.requestHeader()</code> 里的工具 schema——即上一轮请求实际发送的那份；</li>
+<li><strong>消息</strong>：被压缩区间内各事件按表面顺序 <code>deriveEventMessage</code> 派生。</li>
+</ul>
+<h3>3.5 总结（<code>compaction-basic/src/summarizer.ts</code>）</h3>
+<p><code>summarizeWithLlm</code>（:120）把重放前缀原样发给 LLM，只在末尾追加一条压缩指令 user 消息，走 <code>ctx.llm.stream()</code>（<code>purpose: 'compaction'</code>）。关键点：</p>
+<ul>
+<li><strong>指令是最终 user 消息而不是独立 system prompt</strong>（:25-31）——改 system 会从第 0 个 token 失效缓存，追加则前缀全部命中（详见第 4 章）；</li>
+<li>指令模板（:32-67）要求输出固定 8 节 Markdown 检查点：</li>
+</ul>
+<p><code>text
+  ## Primary Request and Intent   用户原始与演化的目标（关键措辞逐字引用）
+  ## Key Technical Concepts       技术栈、框架、模式与约定
+  ## Files and Code               精确路径：为何重要、关键改动或片段
+  ## Errors and Fixes             报错与解法（含相关用户反馈）
+  ## Pending Jobs                 已明确要求但未完成的工作
+  ## Current Work                 检查点时刻正在进行的事
+  ## Next Step                    唯一的下一步动作（或 "(none)"）
+  ## Critical Context             决策及理由、约束、偏好、未决问题</code></p>
+<p>并附保全规则：精确保留文件路径、命令、报错原文、标识符、数值、函数签名与语法片段；忠实记录用户纠正；不得提及"本请求来自压缩"；
+- <strong>二次压缩的合并语义</strong>：若对话里已有 <code>&lt;compacted-summary&gt;</code> 块，它是一份<strong>旧检查点</strong>——不得原样照抄，要保留仍为真的事实、丢弃过时项、合并成单份新摘要（:66）。这解决了"压缩的压缩"会滚动膨胀的问题；
+- <strong>输出安全</strong>（:169-171、197-221）：空文本判失败；图片输出判失败（<code>UNSUPPORTED_CONTENT</code>）；结束原因是 error/aborted 转为 <code>LlmError</code>；<code>max-tokens</code> 截断判失败（不完整的检查点不如没有）；
+- <strong>总结模型路由</strong>（:127-137）：配置的 <code>summarizationProvider + summarizationModel</code>（必须成对配置）→ 会话最近路由的模型 → agent options，三级回退；
+- <strong>失败恢复</strong>（region.ts:397-409）：总结抛错时——若已取消则原样上抛；否则先过稳定性检查，再触发 <code>compaction/summary-error</code> waterfall（<code>packages/compaction/compaction/src/index.ts:92-107</code>），任何监听者返回 true 表示"我已对选中输入做了持久修改"（例如修剪掉一段），事务随即重新校验、重新定价、重试总结；无人恢复则失败。</p>
+<h3>3.6 稳定性检查（region.ts:431-468）</h3>
+<p>总结是异步的，期间会话可能被写入。两种严格度：</p>
+<ul>
+<li><strong>自动压缩</strong>：<code>assertWholeSurfaceUnchanged</code>——要求整个表面逐节点不变，否则 <code>SurfaceChangedError</code> 作废重来；</li>
+<li><strong>手动压缩</strong>：<code>assertSelectedSpanStable</code>——只要求选中区间仍是同一个"存在、连续、等价、平衡"的替换目标；期间新增的表面节点不影响摘要有效性。</li>
+</ul>
+<h3>3.7 收缩检查（region.ts:410-421）</h3>
+<p>总结文本经 <code>frameSummary</code> 包裹后估算 token，必须<strong>严格小于</strong>被替换区间的路由定价 token 总数，否则整个事务失败。这条检查保证压缩不会"越压越大"——模型若把大段内容抄回摘要，事务直接作废。</p>
+<h3>3.8 提交（region.ts:471-522）</h3>
+<p>同步连续写三个日志事件：</p>
+<ol>
+<li><strong><code>compaction/summary</code></strong>：完整审计记录——摘要文本、原始模型输出、<code>shadowedRange/shadowedSeqs</code>（被遮蔽的区间与逐个 seq）、<code>shadowedTokenCount</code>、provider/model/maxTokens/usage、<code>compactionId</code> 及可选的 <code>sourceCommandId</code>；</li>
+<li><strong><code>user/message</code>（检查点）</strong>：带 <code>surfaceOp: { op: 'replace', startSeq, endSeq }</code>，表面层把区间替换成这一个节点；消息的 <code>source</code> 用 <code>compactCheckpointSource(compactionId, ...)</code> 构造（消息源类型 <code>compact-checkpoint</code>，<code>compaction/src/index.ts:25-29</code>），<code>sourceEventSeqs</code> 记录被替代的原始事件（血缘）；</li>
+<li><strong><code>compaction/end</code></strong>：释放锁。</li>
+</ol>
+<p>失败路径也写 <code>compaction/end</code>（附 <code>error</code> 错误链，region.ts:240-251）——<strong>每次尝试都留在日志里可追溯</strong>；若关闭本身也失败，则故意留下未配对的 <code>start</code>（它就是锁，也是事故现场）。</p>
+<p>检查点消息的文本框架（<code>frameSummary</code>，summarizer.ts:188-194）：开场白声明"这是自动生成的检查点，浓缩了前文，当作既定背景直接继续"，摘要包在 <code>&lt;compacted-summary&gt;</code> 标签里——这个标签正是 3.5 中二次压缩合并语义的识别锚点。</p>
+<hr />
+<h2>4. 缓存命中率：把总结调用做成"真前缀"</h2>
+<p>provider 的 KV cache 按最长公共前缀匹配，从第 0 个 token 起任何差异都会使后续全部失效。DSH 的总结调用为此做了三点：</p>
+<ol>
+<li><strong>压缩区永远从最老处开始</strong>（3.1），所以重放内容（system + 区间消息）是上一轮请求消息序列的<strong>严格前缀</strong>；</li>
+<li><strong>system、tools、消息全部原样重建</strong>，压缩指令只追加在尾部——前缀逐 token 一致，只有新增的指令是新鲜 token；</li>
+<li><strong>确定性派生 + 稳定性检查</strong>保证前缀不会拿过期内容去打缓存：消息由与正常请求同源的投影管线派生，总结期间表面被锁在快照状态。</li>
+</ol>
+<div class="alert alert-note">
+<p>这条保证只覆盖<strong>总结这次辅助调用</strong>。压缩落地后，主线对话的下一条请求从检查点位置起就是新前缀了，替换点之后（含保留的尾部）需要重新预填——这是改写历史的固有代价。DSH 的缓解是只压最老区段，让一次性重读的上界等于被替换区间，换取后续每轮 prompt 持久变小。</p>
+</div>
+<hr />
+<h2>5. 大块代码 / JSON 的处理：两层防线 + 图片旁路</h2>
+<p>上下文中的大段代码和 JSON 几乎都来自工具输出。DSH 用两层不同的机制处理，再配一条图片专用旁路。</p>
+<h3>5.1 第一层（总结之前）：工具结果修剪——按位置剪，不靠模型理解</h3>
+<p><code>compaction-tool-result-pruner</code>（<code>src/index.ts:136</code>）在压力达标后、总结之前运行（溢出路径同样先跑）：</p>
+<ul>
+<li>扫描当前表面上所有 <code>tool/result</code> 节点，文本内容超过 <code>thresholdChars</code>（默认 <strong>8192</strong> 字符，按 Unicode 码点计）的，确定性截为<strong>头 4096 + 固定标记 + 尾 1024</strong>：</li>
+</ul>
+<p><code>text
+  \n\n[... tool result middle pruned ...]\n\n     // PRUNE_MARKER，config.ts:7</code></p>
+<ul>
+<li>按码点而非 UTF-16 编码单元切片，不会劈开代理对（:99-109）；</li>
+<li>落地方式与压缩同构：先写 <code>compaction/prune</code> 影子定价事件，再 append 带 <code>surfaceOp: replace</code> 的同型 <code>tool/result</code> 替换件，<code>sourceEventSeqs</code> 指向原节点（:160-171）。原始内容仍在日志里。</li>
+</ul>
+<p>也就是说大 JSON 的"肚子"是被<strong>原样丢弃</strong>的——便宜、确定、可重放；留下的头 4K 通常还能看到 JSON 的结构开头，尾 1K 看到结尾。</p>
+<h3>5.2 第二层（总结）：指令级保全约定</h3>
+<p>进入总结的内容靠指令约束（3.5）：路径、命令、报错原文、标识符、数值、函数签名要求逐字保留；<code>Files and Code</code> 节记录"精确路径：为何重要、关键改动或片段"。这是一份<strong>约定而不是机械保证</strong>——一段代码是否完整存活取决于总结模型的判断。DSH 的隐含假设是：编码 agent 的精确内容本就落盘在文件里，摘要存"路径 + 为什么重要"，需要时再读文件。真正不打折的是<strong>保留尾部</strong>（默认最近 16%）：刚产生的代码/JSON 逐字不动，只有变老的部分才会衰减。收缩检查兜住最坏情况：模型把大段内容抄回摘要导致"越压越大"时，事务失败而非落地劣质压缩。</p>
+<h3>5.3 图片旁路：<code>IMAGE_OFFLOAD_REQUIRED</code></h3>
+<p>图片不走文本总结——多模态请求可能因图片预算（而非 token）被 provider 拒绝。此时适配器返回规范错误码 <code>IMAGE_OFFLOAD_REQUIRED</code>，失败信息携带还需要省略多少张图（<code>packages/llm/llm/src/error.ts:169-175</code>）；<code>compaction-image-offload</code> 的 <code>offloadOldestImages</code> 按<strong>最旧优先</strong>选取保留中的输入图片，记录一次持久的 <code>image/offload</code> 决定（被省略是永久的），随后 agent 或总结器用重新派生的输入重试。</p>
+<h3>5.4 修不了的：单点超大消息</h3>
+<p>若保留尾里有一条巨大消息（或请求信封本身超限），表面压缩无能为力——<code>CompactionEngine</code> 的契约明确写道"单个超大的保留单元或请求信封无法通过表面压缩修复"（<code>compaction/src/index.ts:128-129</code>），此时如实返回 null / 保持原始错误。</p>
+<hr />
+<h2>6. 失败模型与可观测性</h2>
+<p>人工命令侧的错误分类（<code>ManualCompactionError</code>，<code>compaction/src/index.ts:35-64</code>），由 <code>command-compact</code> 映射为人话（<code>command-compact/src/index.ts:28</code>）：</p>
+<table>
+<thead>
+<tr>
+<th>code</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>busy</code></td>
+<td>已有压缩进行中，或 agent 非空闲</td>
+</tr>
+<tr>
+<td><code>cancelled</code></td>
+<td>被取消</td>
+</tr>
+<tr>
+<td><code>changed</code></td>
+<td>总结期间被选历史发生变化（事务作废）</td>
+</tr>
+<tr>
+<td><code>summary</code></td>
+<td>无法产出更小的有效摘要（含收缩检查失败）</td>
+</tr>
+<tr>
+<td><code>commit</code></td>
+<td>提交阶段未干净完成</td>
+</tr>
+<tr>
+<td><code>persistence</code></td>
+<td>压缩成功但落盘失败（flush 抛错）</td>
+</tr>
+</tbody>
+</table>
+<p>自动路径则"尽力而为、失败留痕"：压力触发的失败只告警放行回合；配置类错误（<code>TargetPressureConfigError</code>）按目标去重只告警一次；每次压缩尝试无论成败都在日志里留下 <code>compaction/start</code> / <code>compaction/end</code>（含错误链）事件对。UI 侧（<code>packages/client/ui-chat</code>、<code>ui-trajectory</code>）据此渲染压缩节点与轨迹。</p>
+<hr />
+<h2>7. 计量：路由定价与影子定价</h2>
+<p>压缩全程依赖单例 <code>ctx.tokenMeter</code>（<code>packages/llm/token-meter</code>），且对同一表面节点维护两种价格（region.ts:376-381 的注释）：</p>
+<ul>
+<li><strong>路由定价（<code>tokens</code>）</strong>：按实际路由模型的计价规则估算——用于保留预算、范围选择、收缩比较等"决策"场景；</li>
+<li><strong>启发式定价（<code>heuristicTokens</code>）</strong>：固定规则估算——用于<strong>影子定价协议（shadow-price protocol）</strong>：任何替换件（压缩检查点、修剪后的工具结果）落地时，紧邻地写一条 <code>compaction/prune</code> 类计量事件，报告被遮蔽节点的启发式价格，让纯消费者（如 O(1) 增量投影折叠）能同步扣减而无需维护逐节点状态。</li>
+</ul>
+<p>约定俗成的分工原因：替换件是新增日志事件，投影折叠若要 O(1) 就不能回头重算旧节点，因此用与折叠自身追加逻辑一致的固定启发式计价；而"要不要压、压多少、压完是否真变小"这些决策则必须用真实路由价格才准确。</p>
+<hr />
+<h2>8. 设计评注</h2>
+<div class="alert alert-warn">
+<p>本节是个人分析观点，不是源码事实。</p>
+</div>
+<ol>
+<li><strong>压缩即事件溯源事务</strong>。很多 agent 实现压缩时直接改内存 messages 数组，DSH 把每次压缩变成日志里一组可重放的事件（start/summary/checkpoint/end），换来的能力是：会话文件重放后表面完全重建、失败可追溯、UI 可从日志还原压缩史、人类转录与模型视图分离。代价是日志只增不减——压缩省的是上下文窗口，不是磁盘。</li>
+<li><strong>"真前缀"是精巧但脆弱的约定</strong>。它依赖"压缩区从最老处开始 + 表面在总结期间冻结 + 派生确定性"三个条件同时成立；任何一个被未来改动破坏（比如总结前插入了别的水falls修改），命中率就静默退化，而不会有任何报错。这是典型的"性能正确性"——值得在魔改时重点看护。</li>
+<li><strong>衰减管理靠合并语义而非版本链</strong>。旧检查点不保留独立身份，二次压缩时要求合并去旧（3.5）。这意味着久远细节会逐轮衰减——对编码场景是合理取舍（精确内容在文件里），但对"很久之前用户说过的一句话"这类信息，只有 <code>Critical Context</code> 一节兜底。</li>
+<li><strong>失败开放（fail-open）的自动路径</strong>。压缩失败不阻塞对话，宁可让上下文继续膨胀靠溢出兜底——把可用性放在了窗口卫生前面，与"压缩失败不重试到死"的重试预算（默认 1）一致。</li>
+</ol>
+<hr />
+<h2>附录 A：源码索引</h2>
+<table>
+<thead>
+<tr>
+<th>文件（相对 <code>deepseek-harness/</code>）</th>
+<th>关键内容</th>
+<th>行号（v0.2.1-rc.2）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>packages/compaction/compaction/src/index.ts</code></td>
+<td><code>CompactionEngine</code> 抽象、<code>CompactionTrigger</code>、<code>ManualCompactionError</code>、<code>compaction/summary-error</code> 事件</td>
+<td>32、35、48、92、119</td>
+</tr>
+<tr>
+<td><code>packages/compaction/compaction/src/tool-pairing.ts</code></td>
+<td>工具配对平衡折叠与缓存</td>
+<td>29、72、112</td>
+</tr>
+<tr>
+<td><code>packages/compaction/compaction-basic/src/index.ts</code></td>
+<td>三个触发钩子、<code>compactIfNeeded</code> 压力/溢出路径、<code>compactNow</code></td>
+<td>158、190、269、294、319、383</td>
+</tr>
+<tr>
+<td><code>packages/compaction/compaction-basic/src/config.ts</code></td>
+<td>默认值、<code>resolveCompactSpec</code> 阈值公式</td>
+<td>20、23、75、153</td>
+</tr>
+<tr>
+<td><code>packages/compaction/compaction-basic/src/region.ts</code></td>
+<td>选区、压缩事务、稳定性/收缩检查、提交</td>
+<td>117、173、337、361、387、431、471、544</td>
+</tr>
+<tr>
+<td><code>packages/compaction/compaction-basic/src/summarizer.ts</code></td>
+<td>指令模板、<code>summarizeWithLlm</code>、检查点框架</td>
+<td>22、32、70、120、188</td>
+</tr>
+<tr>
+<td><code>packages/compaction/compaction-tool-result-pruner/src/index.ts</code></td>
+<td>工具结果修剪与影子定价落地</td>
+<td>83、136</td>
+</tr>
+<tr>
+<td><code>packages/compaction/command-compact/src/index.ts</code></td>
+<td><code>/compact</code> 命令与错误映射</td>
+<td>14、28</td>
+</tr>
+<tr>
+<td><code>packages/compaction/compaction-image-offload/src/image-offload.ts</code></td>
+<td>图片最旧优先永久省略</td>
+<td>18</td>
+</tr>
+<tr>
+<td><code>packages/core/session/src/surface.ts</code></td>
+<td>表面模型、append-origin / replacement 区分</td>
+<td>50、78、95、415</td>
+</tr>
+<tr>
+<td><code>packages/core/agent-loop/src/agent.ts</code></td>
+<td><code>preStep()</code>——<code>agent/pre-step</code> 的发出点</td>
+<td>267</td>
+</tr>
+<tr>
+<td><code>packages/llm/llm/src/error.ts</code></td>
+<td><code>IMAGE_OFFLOAD_REQUIRED</code> 规范错误</td>
+<td>169</td>
+</tr>
+</tbody>
+</table>
+<h2>附录 B：配置速查</h2>
+<p><strong>BasicCompactionConfig</strong>（<code>compaction-basic</code>，均可被 <code>modelPolicies[].{provider,model}</code> 按 route 覆盖）：</p>
+<table>
+<thead>
+<tr>
+<th>键</th>
+<th>默认</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>auto</code></td>
+<td><code>true</code></td>
+<td>自动压缩总开关</td>
+</tr>
+<tr>
+<td><code>thresholdRatio</code></td>
+<td><code>0.8</code></td>
+<td>压力线占窗口比例</td>
+</tr>
+<tr>
+<td><code>headroomTokens</code></td>
+<td><code>65536</code></td>
+<td>压缩余量；<code>maxTokens</code> 未设时兼作总结调用上限</td>
+</tr>
+<tr>
+<td><code>retainRatio</code> / <code>retainTokens</code></td>
+<td><code>0.16</code> / —</td>
+<td>尾部原样保留（二选一，互斥；须小于阈值）</td>
+</tr>
+<tr>
+<td><code>summarizationProvider</code> + <code>summarizationModel</code></td>
+<td>空</td>
+<td>总结模型（必须成对设置）</td>
+</tr>
+<tr>
+<td><code>maxTokens</code></td>
+<td><code>= headroomTokens</code></td>
+<td>总结调用输出上限</td>
+</tr>
+<tr>
+<td><code>compactionRetries</code></td>
+<td><code>1</code></td>
+<td>压力路径压缩重试</td>
+</tr>
+<tr>
+<td><code>maxOverflowRetries</code></td>
+<td><code>1</code></td>
+<td>溢出路径恢复重试</td>
+</tr>
+</tbody>
+</table>
+<p><strong>ToolResultPruneConfig</strong>（<code>compaction-tool-result-pruner</code>）：</p>
+<table>
+<thead>
+<tr>
+<th>键</th>
+<th>默认</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>thresholdChars</code></td>
+<td><code>8192</code></td>
+<td>触发修剪的文本长度（Unicode 码点）</td>
+</tr>
+<tr>
+<td><code>headChars</code></td>
+<td><code>4096</code></td>
+<td>保留头部</td>
+</tr>
+<tr>
+<td><code>tailChars</code></td>
+<td><code>1024</code></td>
+<td>保留尾部</td>
+</tr>
+</tbody>
+</table>
+</div>
+</body>
+</html>
